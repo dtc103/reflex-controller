@@ -56,28 +56,43 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-
+    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+    )
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
-
     """Runs the simulation loop."""
     # Extract scene entities
     # note: we only do this here for readability.
     robot:Articulation = scene["unitree"]
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
+    print(sim_dt)
+    print(sim.cfg.dt)
+    print(sim.cfg.render_interval)
+
     count = 0
     angle = 0
     # Simulation loop
+    i = 0.0
+
+    joint_limits = robot.root_physx_view._dof_limits
 
     while simulation_app.is_running():
-        angle += 0.05
-        follow_robot_with_camera(sim, robot, angle_rad=angle)
+        #follow_robot_with_camera(sim, robot, angle_rad=90)
 
-        if count % 500 == 0:
+        if count % 250 == 0:
             print(robot.actuators["base_legs"])
+            print(robot.data.joint_pos)
+            print(robot.data.joint_pos_limits)
+
+        action = torch.Tensor([[0.0] * 12])
+
+
+        robot.set_joint_position_target(action[:, 0:6])
+        robot.set_joint_velocity_target(action[:, 6:])
+        robot.write_data_to_sim()
 
         sim.step()
         count += 1
@@ -90,11 +105,18 @@ def main():
     """Main function."""
     # Load kit helper
     sim_cfg = sim_utils.SimulationCfg(device=args_cli.device)
+    # Find a suitable simulator dt for the simulation!!!!!!!!!!!!!
+    sim_cfg.dt = 1/500
+
+    sim_cfg.render_interval = 1
+    
     sim = SimulationContext(sim_cfg)
     # Set main camera
     sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
     # Design scene
     scene_cfg = UnitreeSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0)
+    scene_cfg.unitree.spawn.articulation_props.fix_root_link = True
+    
     scene = InteractiveScene(cfg=scene_cfg)
     # Play the simulator
     sim.reset()

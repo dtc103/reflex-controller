@@ -2,7 +2,7 @@ import torch
 torch.set_default_dtype(torch.float32)
 
 class MuscleModel:
-    def __init__(self, muscle_params, action_tensor, nenvironments):
+    def __init__(self, muscle_params, num_joints, nenvironments):
         self.device = "cuda"
         self.nactioncount = action_tensor.shape[1]
         self.nenvironments = nenvironments
@@ -66,8 +66,6 @@ class MuscleModel:
         )
         self.moment, self.lce_ref = self.compute_parametrization(action_tensor)
 
-    def analyse_muscle(self):
-        pass
 
     def FL(self, lce: torch.Tensor) -> torch.Tensor:
         """
