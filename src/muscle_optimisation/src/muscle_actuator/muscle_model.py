@@ -260,11 +260,9 @@ class MuscleModel:
         FV = self.FV(lce_dot)
         FP = self.FP(lce_tensor)
 
-        self.force_tensor = torch.add(torch.mul(torch.mul(FL, FV), self.activation_tensor), FP)
-        # peak_force = self.get_peak_force(actuator_velocity)
-        F = torch.mul(self.force_tensor, self.peak_force)
+        #self.force_tensor = torch.add(torch.mul(torch.mul(FL, FV), self.activation_tensor), FP)
+        F = self.peak_force * (FL * FV * self.activation_tensor  + FP)
         torque = F * self.moment
-
 
         return torch.sum(
             torch.reshape(torque, (self.nenvironments, 2, self.nactioncount // 2)),

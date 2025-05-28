@@ -9,6 +9,8 @@ from isaaclab.actuators import ActuatorBase
 if TYPE_CHECKING:
     from .muscle_actuator_cfg import MuscleActuatorCfg
 
+from scipy.optimize import bisect
+
 class MuscleActuator(ActuatorBase):
     cfg: MuscleActuatorCfg
 
@@ -86,6 +88,13 @@ class MuscleActuator(ActuatorBase):
         b2 = self._bump(length, self.lmin, 0.5 * (self.lmin + 0.95), 0.95)
         bump_res = b1 + 0.15 * b2
         return bump_res
+    
+    def _calc_l_min(self, Fmin, lmin, lmax, tol=10e-7):
+        def f(l_ce):
+            return self._FL(l_ce, lmin, lmax) - Fmin
+        
+        mid = 1.0
+        return bisect(lambda x: f(x), lmin + 10e-9, mid - 10e-9, xtol=tol)
 
     def _bump(self, length: torch.Tensor, A: float, mid: float, B: float) -> torch.Tensor:
         """

@@ -29,6 +29,7 @@ from isaaclab.utils import configclass
 # Pre-defined configs
 ##
 from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+from isaaclab_assets import UNITREE_GO2_CFG
 
 
 def follow_robot_with_camera(sim: SimulationContext, robot, angle_rad=0.0, radius=3.0, height=1.0):
@@ -56,7 +57,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -86,13 +87,14 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             print(robot.actuators["base_legs"])
             print(robot.data.joint_pos)
             print(robot.data.joint_pos_limits)
+            print(robot.data.joint_names)
 
-        action = torch.Tensor([[0.0] * 12])
+        # action = torch.Tensor([[0.0] * 12])
 
 
-        robot.set_joint_position_target(action[:, 0:6])
-        robot.set_joint_velocity_target(action[:, 6:])
-        robot.write_data_to_sim()
+        # robot.set_joint_position_target(action[:, 0:6])
+        # robot.set_joint_velocity_target(action[:, 6:])
+        # robot.write_data_to_sim()
 
         sim.step()
         count += 1
