@@ -247,7 +247,7 @@ class MuscleModel:
         self.activation_tensor = torch.clip(self.activation_tensor, 0, 1)
         # self.activation_tensor = torch.mul(torch.mul(torch.sub(actions,self.activation_tensor), 100), torch.add(self.activation_tensor, sim_timestep))
 
-    def compute_moment(self, actions, actuator_vel, lce_1, lce_2):
+    def compute_moment(self, actuator_vel):
         """
         Joint moments are computed from muscle contractions and then returned
         """
@@ -283,6 +283,6 @@ class MuscleModel:
             self.compute_virtual_lengths(actuator_pos)
 
             # compute moments
-            moment = self.compute_moment(actions, actuator_vel, self.lce_1_tensor, self.lce_2_tensor)
+            moment = self.compute_moment(actions, actuator_vel)
 
             return moment
