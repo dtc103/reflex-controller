@@ -17,7 +17,7 @@ simulation_app = app_launcher.app
 
 import torch
 import math
-from muscle_actuator import muscle_actuator, muscle_actuator_cfg
+from muscle_actuator import muscle_actuator, muscle_actuator_cfg, muscle_parameters
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, Articulation
@@ -28,7 +28,7 @@ from isaaclab.utils import configclass
 ##
 # Pre-defined configs
 ##
-from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, muscle_params
 from isaaclab_assets import UNITREE_GO2_CFG
 
 
@@ -107,8 +107,9 @@ def main():
     """Main function."""
     # Load kit helper
     sim_cfg = sim_utils.SimulationCfg(device=args_cli.device)
+    
     # Find a suitable simulator dt for the simulation!!!!!!!!!!!!!
-    sim_cfg.dt = 1/500
+    sim_cfg.dt = muscle_parameters.muscle_params["dt"]
 
     sim_cfg.render_interval = 1
     
@@ -130,11 +131,7 @@ def main():
 
 
 if __name__ == "__main__":
-
     # run the main function
-
     main()
-
     # close sim app
-
     simulation_app.close()

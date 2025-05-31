@@ -64,18 +64,7 @@ class MuscleActuator(ActuatorBase):
             device=self.device,
             requires_grad=False,
         )
-        self.lce_1_tensor = torch.zeros(
-            (self._num_envs, self.num_joints),
-            dtype=torch.float32,
-            device=self.device,
-            requires_grad=False,
-        )
-        self.lce_2_tensor = torch.zeros(
-            (self._num_envs, self.num_joints),
-            dtype=torch.float32,
-            device=self.device,
-            requires_grad=False,
-        )
+
         self.moment, self.lce_ref = self._compute_parametrization()
         
 
@@ -120,16 +109,16 @@ class MuscleActuator(ActuatorBase):
         )
 
         x = (B - length) / (B - right)
-        bump_result = 0.5 * x * x
+        bump_result = 0.5 * x**2
 
         x = (length - mid) / (right - mid)
-        bump_result = torch.where(length < right, 1 - 0.5 * x * x, bump_result)
+        bump_result = torch.where(length < right, 1 - 0.5 * x**2, bump_result)
 
         x = (mid - length) / (mid - left)
-        bump_result = torch.where(length < mid, 1 - 0.5 * x * x, bump_result)
+        bump_result = torch.where(length < mid, 1 - 0.5 * x**2, bump_result)
 
         x = (length - A) / (left - A)
-        bump_result = torch.where((length < left) & (length > A), 0.5 * x * x, bump_result)
+        bump_result = torch.where((length < left) & (length > A), 0.5 * x**2, bump_result)
 
         bump_result = torch.where(
             torch.logical_or((length <= A), (length >= B)),
@@ -147,7 +136,7 @@ class MuscleActuator(ActuatorBase):
         c = self.fvmax - 1
         velocity = lce_dot
 
-        eff_vel = torch.div(velocity, self.vmax)
+        eff_vel = velocity / self.vmax
 
         c_result = torch.zeros_like(
             eff_vel,
@@ -162,13 +151,10 @@ class MuscleActuator(ActuatorBase):
             c_result,
         )
 
-        x = torch.sub(
-            self.fvmax,
-            torch.div(torch.mul(torch.sub(c, eff_vel), torch.sub(c, eff_vel)), c),
-        )
+        x = self.fvmax - ((c - eff_vel) ** 2 / c)
         c_result = torch.where(eff_vel <= c, x, c_result)
 
-        x = torch.mul(torch.add(eff_vel, 1), torch.add(eff_vel, 1))
+        x = (eff_vel + 1) ** 2
         c_result = torch.where(eff_vel <= 0, x, c_result)
 
         c_result = torch.where(
@@ -190,14 +176,12 @@ class MuscleActuator(ActuatorBase):
 
         # Order of assignment needs to be inverse to the if-else-clause case
         ## method to prevent
-        cond_2_tmp = torch.div(torch.sub(lce, 1), (b - 1))
-        cond_2 = torch.mul(
-            torch.mul(torch.mul(cond_2_tmp, cond_2_tmp), cond_2_tmp),
-            (0.25 * self.fpmax),
-        )
+        cond_2_tmp = (lce - 1) / (b - 1)
+        cond_2 = (cond_2_tmp ** 3) * (0.25 * self.fpmax)
 
-        cond_3_tmp = torch.div(torch.sub(lce, b), (b - 1))
-        cond_3 = torch.mul(torch.add(torch.mul(cond_3_tmp, 3), 1), (0.25 * self.fpmax))
+        cond_3_tmp = (lce - b) / (b - 1)
+        cond_3 = (cond_3_tmp * 3 + 1) * (0.25 * self.fpmax)
+        
         ##### copy based on condition the correct output into new tensor
         c_result = torch.zeros_like(lce, dtype=torch.float32, device=self.device, requires_grad=False)
         c_result = torch.where(lce <= b, cond_2, c_result)
@@ -247,7 +231,7 @@ class MuscleActuator(ActuatorBase):
         slide or hinge joints and no free joint!!! Otherwise you have to build this mapping
         by looking at every single joint type.
         """
-        return torch.mul(actuator_vel.repeat(1, 2), moment)
+        return actuator_vel.repeat(1, 2) * moment
 
     def _activ_dyn(self, actions: torch.Tensor) -> None:
         """
@@ -269,10 +253,9 @@ class MuscleActuator(ActuatorBase):
         FV = self._FV(lce_dot)
         FP = self._FP(lce_tensor)
 
-        self.force_tensor = torch.add(torch.mul(torch.mul(FL, FV), self.activation_tensor), FP)
-        # peak_force = self.get_peak_force(actuator_velocity)
-        F = torch.mul(self.force_tensor, self.peak_force)
-        torque = F * self.moment
+        self.force_tensor = self.activation_tensor * FL * FV + FP
+        real_force = self.peak_force * self.force_tensor
+        torque = real_force * self.moment
 
         return torch.sum(
             torch.reshape(torque, (self._num_envs, 2, self.num_joints)),
@@ -284,7 +267,7 @@ class MuscleActuator(ActuatorBase):
         actuator_pos: Current position of actuator
         """
 
-        # since isaac lab does not allow the definition of own action items, we just 
+        # since isaac lab does not allow the definition of own input items, we just 
         # act like the inputted control_action.joint_positions contain the muscle activations for one muscle of each joint
         # and control_action.joint_velocities the activations of the other muscles of the joint
         muscles_actvations_1 = control_action.joint_positions
@@ -301,7 +284,7 @@ class MuscleActuator(ActuatorBase):
             self._compute_virtual_lengths(actuator_pos)
 
             # compute moments
-            moment = self._compute_moment(actions, actuator_vel, self.lce_1_tensor, self.lce_2_tensor)
+            moment = self._compute_moment(actions, actuator_vel)
 
             control_action.joint_efforts = moment
             control_action.joint_positions = None
