@@ -15,8 +15,6 @@ class MuscleActuator(ActuatorBase):
     cfg: MuscleActuatorCfg
 
     def __init__(self, cfg: MuscleActuatorCfg, *args, **kwargs):
-        print("CREATER MUSCLE ACTUATOR")
-        
         super().__init__(cfg, *args, **kwargs)
 
         MuscleActuator.is_implicit_model = False
@@ -25,19 +23,17 @@ class MuscleActuator(ActuatorBase):
         for key, value in self.muscle_params.items():
             setattr(self, key, value)
 
-        self.phi_min = torch.ones(
-                (self._num_envs, self.num_joints),
-                dtype=torch.float32,
-                device=self.device,
-                requires_grad=False,
-            ) * self.phi_min
+        self.phi_min = torch.tensor(
+            self.angles[:, 0].clone().detach(), 
+            device=self.device, 
+            requires_grad=False
+        )
         
-        self.phi_max = torch.ones(
-                (self._num_envs, self.num_joints),
-                dtype=torch.float32,
-                device=self.device,
-                requires_grad=False,
-            ) * self.phi_max
+        self.phi_max = torch.tensor(
+            self.angles[:, 1].clone().detach(), 
+            device=self.device, 
+            requires_grad=False
+        )
 
         self.activation_tensor = torch.zeros(
             (self._num_envs, self.num_joints * 2),
@@ -78,12 +74,12 @@ class MuscleActuator(ActuatorBase):
         bump_res = b1 + 0.15 * b2
         return bump_res
     
-    def _calc_l_min(self, Fmin, lmin, lmax, tol=10e-7):
+    def _calc_l_min(self, Fmin, tol=10e-7):
         def f(l_ce):
-            return self._FL(l_ce, lmin, lmax) - Fmin
+            return self._FL(torch.tensor([l_ce], device=self.device)) - Fmin
         
         mid = 1.0
-        return bisect(lambda x: f(x), lmin + 10e-9, mid - 10e-9, xtol=tol)
+        return bisect(lambda x: f(x), self.lmin + 10e-9, mid - 10e-9, xtol=tol)
 
     def _bump(self, length: torch.Tensor, A: float, mid: float, B: float) -> torch.Tensor:
         """
@@ -201,12 +197,16 @@ class MuscleActuator(ActuatorBase):
 
         We compute them as one long vector now.
         """
-        moment = torch.zeros((self._num_envs, self.num_joints * 2))
-        moment[:, : int(moment.shape[1] // 2)] = (self.lce_max - self.lce_min) / (self.angles[:, 1] - self.angles[:, 0])
-        moment[:, int(moment.shape[1] // 2) :] = (self.lce_max - self.lce_min) / (self.angles[:, 0] - self.angles[:, 1])
-        lce_ref = torch.zeros((self._num_envs, self.num_joints))
-        lce_ref[:, : int(lce_ref.shape[1] // 2)] = self.lce_min - moment[:, : int(moment.shape[1] // 2)] * self.angles[:, 0]
-        lce_ref[:, int(lce_ref.shape[1] // 2) :] = self.lce_min - moment[:, int(moment.shape[1] // 2) :] * self.angles[:, 1]
+
+        self.lce_min = self._calc_l_min(self.fmin)
+
+        moment = torch.zeros((self._num_envs, self.num_joints * 2), device=self.device)
+        moment[:, : int(moment.shape[1] // 2)] = (self.lce_max - self.lce_min) / (self.phi_max - self.phi_min)
+        moment[:, int(moment.shape[1] // 2) :] = (self.lce_max - self.lce_min) / (self.phi_min - self.phi_max)
+        
+        lce_ref = torch.zeros((self._num_envs, self.num_joints * 2), device=self.device)
+        lce_ref[:, : int(lce_ref.shape[1] // 2)] = self.lce_min - moment[:, : int(moment.shape[1] // 2)].squeeze() * self.phi_min
+        lce_ref[:, int(lce_ref.shape[1] // 2) :] = self.lce_min - moment[:, int(moment.shape[1] // 2) :].squeeze() * self.phi_max
         return moment, lce_ref
 
     def _compute_virtual_lengths(self, actuator_pos: torch.Tensor) -> None:
@@ -220,7 +220,7 @@ class MuscleActuator(ActuatorBase):
         """
         # Repeat position tensor twice, because both muscles are computed from the same actuator position
         # the operation is NOT applied in-place to the original tensor, only the result is repeated.
-        self.lce_tensor = torch.add(torch.mul(actuator_pos.repeat(1, 2), self.moment), self.lce_ref)
+        self.lce_tensor = actuator_pos.repeat(1, 2) * self.moment + self.lce_ref
 
     def _get_vel(self, moment, actuator_vel: torch.Tensor) -> torch.Tensor:
         """
@@ -250,6 +250,7 @@ class MuscleActuator(ActuatorBase):
         lce_tensor = self.lce_tensor
 
         FL = self._FL(lce_tensor)
+        print("FL", FL)
         FV = self._FV(lce_dot)
         FP = self._FP(lce_tensor)
 
@@ -262,7 +263,7 @@ class MuscleActuator(ActuatorBase):
             axis=-2,
         )
 
-    def compute(self, control_action: ArticulationActions, actuator_pos, actuator_vel):
+    def compute(self, control_action: ArticulationActions, joint_pos, joint_vel):
         """
         actuator_pos: Current position of actuator
         """
@@ -270,27 +271,27 @@ class MuscleActuator(ActuatorBase):
         # since isaac lab does not allow the definition of own input items, we just 
         # act like the inputted control_action.joint_positions contain the muscle activations for one muscle of each joint
         # and control_action.joint_velocities the activations of the other muscles of the joint
-        muscles_actvations_1 = control_action.joint_positions
+        muscle_activations_1 = control_action.joint_positions
         muscle_activations_2 = control_action.joint_velocities
-        muscle_activations = torch.concatenate([muscles_actvations_1, muscle_activations_2], dim=1)
+        muscle_activations = torch.concatenate([muscle_activations_1, muscle_activations_2], dim=1)
 
-        with torch.torch.no_grad():
+        with torch.no_grad():
             actions = torch.clip(muscle_activations, 0, 1)
 
             # activity funciton for muscle activation
             self._activ_dyn(actions)
 
             # update virtual lengths
-            self._compute_virtual_lengths(actuator_pos)
+            self._compute_virtual_lengths(joint_pos)
 
             # compute moments
-            moment = self._compute_moment(actions, actuator_vel)
+            moment = self._compute_moment(joint_vel)
 
             control_action.joint_efforts = moment
             control_action.joint_positions = None
             control_action.joint_velocities = None
 
-            return control_action
+        return control_action
 
     def reset(self, *args, **kwargs):
         pass

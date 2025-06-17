@@ -1,6 +1,6 @@
 import isaaclab.sim as sim_utils
 from muscle_actuator.muscle_actuator_cfg import MuscleActuatorCfg
-from muscle_actuator import muscle_parameters
+from muscle_actuator.muscle_parameters import muscle_params
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
@@ -41,7 +41,7 @@ UNITREE_GO2_MUSCLE_CFG = ArticulationCfg(
             stiffness=25.0,
             damping=0.5,
             friction=0.0,
-            muscle_params=muscle_parameters.muscle_params
+            muscle_params=muscle_params
         )
     },
 )

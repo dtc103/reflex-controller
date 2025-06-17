@@ -4,6 +4,7 @@ muscle_params = {
     "lmin": 0.24,
     "lmax": 1.53,
     "fvmax": 1.38,
+    "vmax": 10,
     "fpmax": 1.76,
     "fmin": 0.1,
     "lce_max": 1.0,

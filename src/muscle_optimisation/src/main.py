@@ -25,10 +25,14 @@ from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 
+import matplotlib.pyplot as plt
+import numpy as np
+import time
+
 ##
 # Pre-defined configs
 ##
-from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, muscle_params
+from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 
 
@@ -57,7 +61,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -72,29 +76,39 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     print(sim_dt)
     print(sim.cfg.dt)
     print(sim.cfg.render_interval)
+    print(robot.data.joint_names)
+    print(robot.data.body_names)
+
+    plt.ion()
+
+    fig, ax = plt.subplots()
+    line, = ax.plot([], [], "b-")
+    ax.set_xlim(-2, 2)
+    ax.set_ylim()
 
     count = 0
-    angle = 0
     # Simulation loop
     i = 0.0
-
-    joint_limits = robot.root_physx_view._dof_limits
+    
+    action = torch.tensor([[0.0] * 24], device=muscle_parameters.muscle_params["device"])
 
     while simulation_app.is_running():
         #follow_robot_with_camera(sim, robot, angle_rad=90)
 
-        if count % 250 == 0:
-            print(robot.actuators["base_legs"])
-            print(robot.data.joint_pos)
-            print(robot.data.joint_pos_limits)
-            print(robot.data.joint_names)
+        if count % 100 == 0:
+            
+            if i > 1.0:
+                i = 0.0
+            i += 0.05
+            action[:, 0] = i
+            action[:, 12] = 0.1
 
-        # action = torch.Tensor([[0.0] * 12])
+            print(action)
 
-
-        # robot.set_joint_position_target(action[:, 0:6])
-        # robot.set_joint_velocity_target(action[:, 6:])
-        # robot.write_data_to_sim()
+        robot.set_joint_position_target(action[:, 0:12])
+        robot.set_joint_velocity_target(action[:, 12:])
+        robot.write_data_to_sim()
+        print("torque: ", robot.data.applied_torque)
 
         sim.step()
         count += 1
