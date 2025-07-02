@@ -32,7 +32,7 @@ import time
 ##
 # Pre-defined configs
 ##
-from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_MIXED_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 
 
@@ -92,10 +92,13 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     
     action = torch.tensor([[0.0] * 24], device=muscle_parameters.muscle_params["device"])
 
+    pos_array = []
+    force_array = []
+
     while simulation_app.is_running():
         #follow_robot_with_camera(sim, robot, angle_rad=90)
 
-        if count % 100 == 0:
+        if count % 250 == 0:
             
             if i > 1.0:
                 i = 0.0
@@ -103,12 +106,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             action[:, 0] = i
             action[:, 12] = 0.1
 
+            #action[:, 1] = 0.5
+
             print(action)
+
+            
 
         robot.set_joint_position_target(action[:, 0:12])
         robot.set_joint_velocity_target(action[:, 12:])
         robot.write_data_to_sim()
-        print("torque: ", robot.data.applied_torque)
+        #print("torque: ", robot.data.applied_torque)
 
         sim.step()
         count += 1

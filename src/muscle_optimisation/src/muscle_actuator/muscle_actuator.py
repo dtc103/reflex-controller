@@ -61,6 +61,8 @@ class MuscleActuator(ActuatorBase):
             requires_grad=False,
         )
 
+        self.effort_limit = self.peak_force
+
         self.moment, self.lce_ref = self._compute_parametrization()
         
 
@@ -250,9 +252,9 @@ class MuscleActuator(ActuatorBase):
         lce_tensor = self.lce_tensor
 
         FL = self._FL(lce_tensor)
-        print("FL", FL)
-        FV = self._FV(lce_dot)
-        FP = self._FP(lce_tensor)
+        #print("FL", FL)
+        FV = 1.0 #self._FV(lce_dot)
+        FP = 0.0 #self._FP(lce_tensor)
 
         self.force_tensor = self.activation_tensor * FL * FV + FP
         real_force = self.peak_force * self.force_tensor
@@ -263,7 +265,7 @@ class MuscleActuator(ActuatorBase):
             axis=-2,
         )
 
-    def compute(self, control_action: ArticulationActions, joint_pos, joint_vel):
+    def compute(self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel) -> ArticulationActions:
         """
         actuator_pos: Current position of actuator
         """
@@ -290,6 +292,11 @@ class MuscleActuator(ActuatorBase):
             control_action.joint_efforts = moment
             control_action.joint_positions = None
             control_action.joint_velocities = None
+
+            print(moment)
+
+            # self.computed_effort = 
+            # self.applied_effort = self._clip_effort()
 
         return control_action
 
