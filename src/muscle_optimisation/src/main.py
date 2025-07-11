@@ -27,14 +27,12 @@ from isaaclab.utils import configclass
 
 import matplotlib.pyplot as plt
 import numpy as np
-import time
 
 ##
 # Pre-defined configs
 ##
 from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_MIXED_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
-
 
 def follow_robot_with_camera(sim: SimulationContext, robot, angle_rad=0.0, radius=3.0, height=1.0):
     # Get the root position of the first environment's robot
@@ -79,49 +77,137 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     print(robot.data.joint_names)
     print(robot.data.body_names)
 
-    plt.ion()
-
-    fig, ax = plt.subplots()
-    line, = ax.plot([], [], "b-")
-    ax.set_xlim(-2, 2)
-    ax.set_ylim()
+    i1 = 0.0    
 
     count = 0
-    # Simulation loop
-    i = 0.0
     
     action = torch.tensor([[0.0] * 24], device=muscle_parameters.muscle_params["device"])
 
-    pos_array = []
-    force_array = []
-
     while simulation_app.is_running():
-        #follow_robot_with_camera(sim, robot, angle_rad=90)
+        follow_robot_with_camera(sim, robot, angle_rad=90)
 
-        if count % 250 == 0:
+        if count % 500 == 0:
+            # if i1 > 1.0:
+            #     i1 = 0.0
             
-            if i > 1.0:
-                i = 0.0
-            i += 0.05
-            action[:, 0] = i
-            action[:, 12] = 0.1
+            # i1 += 0.05
+            root_state = robot.data.default_root_state.clone()
+            print(root_state)
+            robot.write_root_pose_to_sim(root_state[:, :7])
+            robot.write_root_velocity_to_sim(root_state[:, 7:])
+            # set joint positions with some noise
+            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
+            robot.write_joint_state_to_sim(joint_pos, joint_vel)
+            # clear internal buffers
+            robot.reset()
 
-            #action[:, 1] = 0.5
+        # hip flexor
+        action[:, :4] = 0.3 #extensor
+        action[:, 12:16] = 0.3 #flexor
 
-            print(action)
+        # thigh
+        action[:, 4:8] =  0.3 #extensor
+        action[:, 16:20] = 0.3 #flexor
 
-            
+        # calf
+        action[:, 8:12] = 0.3 #extensor
+        action[:, 20:24] = 0.3 #flexor
 
-        robot.set_joint_position_target(action[:, 0:12])
-        robot.set_joint_velocity_target(action[:, 12:])
+        action[:, [5, 17]] = 0
+
+        robot.set_joint_position_target(action[:, 12:])
+        robot.set_joint_velocity_target(action[:, :12])
         robot.write_data_to_sim()
-        #print("torque: ", robot.data.applied_torque)
+
+        print("Names:", robot.data.joint_names)
+        print("Pos:", robot.data.joint_pos[0])
 
         sim.step()
         count += 1
         scene.update(sim_dt)
 
 
+def reset_robot(robot):
+    root_state = robot.data.default_root_state.clone()
+    robot.write_root_pose_to_sim(root_state[:, :7])
+    robot.write_root_velocity_to_sim(root_state[:, 7:])
+    # set joint positions with some noise
+    joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
+    robot.write_joint_state_to_sim(joint_pos, joint_vel)
+    # clear internal buffers
+    robot.reset()
+
+def run_activation_experiment(sim: sim_utils.SimulationContext, scene: InteractiveScene):
+    robot: Articulation = scene["unitree"]
+    num_joints = len(robot.data.joint_names)
+
+    sim_dt = sim.get_physics_dt()
+
+    action_steps = [0.2, 0.1, 0.05, 0.01]
+
+
+    # check each individual joint
+    for i, joint_name in enumerate(robot.data.joint_names):
+        print("Joint experiments:", joint_name)
+        # try different changings of action steps to see dynamics
+        for action_step in action_steps:
+            print("Action Step:", action_step)
+
+            print("Reset before new step...")
+            reset_robot(robot)
+            activations = torch.tensor([[0.3] * 2 * num_joints], device=muscle_parameters.muscle_params["device"])
+            activations[:, [i, i + num_joints]] = 0.0
+
+            # give robot some time to find start position
+            for _ in range(300):
+                robot.set_joint_position_target(activations[:, num_joints:])
+                robot.set_joint_velocity_target(activations[:, :num_joints])
+                robot.write_data_to_sim()
+
+                sim.step()
+                scene.update(sim_dt)
+
+            robot.actuators['base_legs'].start_logging()
+            # try all the co-contractions for all steps
+            for a1 in torch.arange(0.0, 1.0 + action_step, action_step):
+                for a2 in torch.arange(0.0, 1.0 + action_step, action_step):
+                    count = 1
+                    activations[:, i] = a2 #extensor
+                    activations[:, i + num_joints] = a1 #flexor
+                    
+                    # give the simulation some time to reach a final state
+                    while simulation_app.is_running:
+                        if count % 250 == 0:
+                            break
+                            
+                        robot.set_joint_position_target(activations[:, num_joints:])
+                        robot.set_joint_velocity_target(activations[:, :num_joints])
+                        robot.write_data_to_sim()
+
+                        sim.step()
+                        scene.update(sim_dt)
+
+                        count += 1
+                
+                print("Reset for new activation loop...")
+                reset_robot(robot)
+                activations = torch.tensor([[0.3] * 2 * num_joints], device=muscle_parameters.muscle_params["device"])
+                activations[:, [i, i + num_joints]] = 0.0
+                for _ in range(300):
+                    robot.set_joint_position_target(activations[:, num_joints:])
+                    robot.set_joint_velocity_target(activations[:, :num_joints])
+                    robot.write_data_to_sim()
+
+                    sim.step()
+                    scene.update(sim_dt)
+                
+            print("Saving results to", f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
+            robot.actuators['base_legs'].save_logs(f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
+            robot.actuators['base_legs'].stop_logging()
+            robot.actuators['base_legs'].reset_logging()
+
+
+            
 
 def main():
 
@@ -147,7 +233,7 @@ def main():
     # Now we are ready!
     print("[INFO]: Setup complete...")
     # Run the simulator
-    run_simulator(sim, scene)
+    run_activation_experiment(sim, scene)
 
 
 

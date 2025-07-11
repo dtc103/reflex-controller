@@ -1,7 +1,8 @@
 from __future__ import annotations
 import torch
+import os
+import pickle
 from typing import TYPE_CHECKING
-
 
 from isaaclab.utils.types import ArticulationActions
 
@@ -19,6 +20,8 @@ class MuscleActuator(ActuatorBase):
 
         MuscleActuator.is_implicit_model = False
         self.muscle_params = cfg.muscle_params
+
+        self.is_logging = False
 
         for key, value in self.muscle_params.items():
             setattr(self, key, value)
@@ -64,7 +67,6 @@ class MuscleActuator(ActuatorBase):
         self.effort_limit = self.peak_force
 
         self.moment, self.lce_ref = self._compute_parametrization()
-        
 
     def _FL(self, lce: torch.Tensor) -> torch.Tensor:
         """
@@ -95,7 +97,6 @@ class MuscleActuator(ActuatorBase):
         Returns:
             :torch.Tensor: contains FV result [Nenv, Nactuator]
         """
-
         left = 0.5 * (A + mid)
         right = 0.5 * (mid + B)
         # Order of assignment needs to be inverse to the if-else-clause case
@@ -203,12 +204,12 @@ class MuscleActuator(ActuatorBase):
         self.lce_min = self._calc_l_min(self.fmin)
 
         moment = torch.zeros((self._num_envs, self.num_joints * 2), device=self.device)
-        moment[:, : int(moment.shape[1] // 2)] = (self.lce_max - self.lce_min) / (self.phi_max - self.phi_min)
-        moment[:, int(moment.shape[1] // 2) :] = (self.lce_max - self.lce_min) / (self.phi_min - self.phi_max)
+        moment[:, int(moment.shape[1] // 2):] = (self.lce_max - self.lce_min) / (self.phi_max - self.phi_min)
+        moment[:, :int(moment.shape[1] // 2)] = (self.lce_max - self.lce_min) / (self.phi_min - self.phi_max)
         
         lce_ref = torch.zeros((self._num_envs, self.num_joints * 2), device=self.device)
-        lce_ref[:, : int(lce_ref.shape[1] // 2)] = self.lce_min - moment[:, : int(moment.shape[1] // 2)].squeeze() * self.phi_min
-        lce_ref[:, int(lce_ref.shape[1] // 2) :] = self.lce_min - moment[:, int(moment.shape[1] // 2) :].squeeze() * self.phi_max
+        lce_ref[:, int(lce_ref.shape[1] // 2):] = self.lce_min - moment[:, int(moment.shape[1] // 2):].squeeze() * self.phi_min
+        lce_ref[:, :int(lce_ref.shape[1] // 2)] = self.lce_min - moment[:, :int(moment.shape[1] // 2) :].squeeze() * self.phi_max
         return moment, lce_ref
 
     def _compute_virtual_lengths(self, actuator_pos: torch.Tensor) -> None:
@@ -252,13 +253,22 @@ class MuscleActuator(ActuatorBase):
         lce_tensor = self.lce_tensor
 
         FL = self._FL(lce_tensor)
-        #print("FL", FL)
-        FV = 1.0 #self._FV(lce_dot)
-        FP = 0.0 #self._FP(lce_tensor)
+        FV = self._FV(lce_dot)
+        FP = self._FP(lce_tensor)
 
         self.force_tensor = self.activation_tensor * FL * FV + FP
         real_force = self.peak_force * self.force_tensor
-        torque = real_force * self.moment
+        # due to the direction of movement in IsaacLab, we need to put the -1 here
+        torque = -1 * real_force * self.moment
+
+        if self.is_logging:
+            self.log["FL"].append(FL.detach().cpu().numpy())
+            self.log["FV"].append(FV.detach().cpu().numpy())
+            self.log["FP"].append(FP.detach().cpu().numpy())
+            self.log["lce_tensor"].append(self.lce_tensor.detach().cpu().numpy())
+            self.log["lce_dot_tensor"].append(self.lce_dot_tensor.detach().cpu().numpy())
+            self.log["force_tensor"].append(self.force_tensor.detach().cpu().numpy())
+            self.log["torque"].append(torque.detach().cpu().numpy())
 
         return torch.sum(
             torch.reshape(torque, (self._num_envs, 2, self.num_joints)),
@@ -280,6 +290,12 @@ class MuscleActuator(ActuatorBase):
         with torch.no_grad():
             actions = torch.clip(muscle_activations, 0, 1)
 
+            if self.is_logging:
+                self.log["joint_position"].append(joint_pos.detach().cpu().numpy())
+                self.log["joint_velocity"].append(joint_vel.detach().cpu().numpy())
+                self.log["clipped_activations"].append(actions.detach().cpu().numpy())
+                self.log["raw_activations"].append(muscle_activations.detach().cpu().numpy())
+
             # activity funciton for muscle activation
             self._activ_dyn(actions)
 
@@ -293,12 +309,48 @@ class MuscleActuator(ActuatorBase):
             control_action.joint_positions = None
             control_action.joint_velocities = None
 
-            print(moment)
+            self.computed_effort = moment
+            self.applied_effort = self._clip_effort(self.computed_effort)
 
-            # self.computed_effort = 
-            # self.applied_effort = self._clip_effort()
+            if self.is_logging:
+                self.log["computed_effort"].append(self.computed_effort.detach().cpu().numpy())
 
         return control_action
+    
+    def start_logging(self):
+        self.log = {}
+        self.log["moment"] = []
+        self.log["lce_ref"] = []
+        self.log["FL"] = []
+        self.log["FV"] = []
+        self.log["FP"] = []
+        self.log["raw_activations"] = [] #direct input
+        self.log["clipped_activations"] = [] # clipped activations
+        self.log["lce_tensor"] = []
+        self.log["lce_dot_tensor"] = []
+        self.log["joint_position"] = []
+        self.log["joint_velocity"] = []
+        self.log["force_tensor"] = []
+        self.log["computed_effort"] = []
+        self.log["torque"] = []
+
+        self.log["moment"] = self.moment.detach().cpu().numpy()
+        self.log["lce_ref"] = self.lce_ref.detach().cpu().numpy()
+
+        self.is_logging = True
+
+    def save_logs(self, file_path="data/logs.pkl"):
+        if self.is_logging:
+            save_dir = os.path.dirname(file_path)
+            os.makedirs(save_dir, exist_ok=True)
+            with open(file_path, 'wb') as f:
+                pickle.dump(self.log, f)
+
+    def reset_logging(self):
+        self.log.clear()
+
+    def stop_logging(self):
+        self.is_logging = False
 
     def reset(self, *args, **kwargs):
         pass
