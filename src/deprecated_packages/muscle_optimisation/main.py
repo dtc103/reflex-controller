@@ -127,90 +127,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         scene.update(sim_dt)
 
 
-def reset_robot(robot):
-    root_state = robot.data.default_root_state.clone()
-    robot.write_root_pose_to_sim(root_state[:, :7])
-    robot.write_root_velocity_to_sim(root_state[:, 7:])
-    # set joint positions with some noise
-    joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-    robot.write_joint_state_to_sim(joint_pos, joint_vel)
-    # clear internal buffers
-    robot.reset()
-
-def run_activation_experiment(sim: sim_utils.SimulationContext, scene: InteractiveScene):
-    robot: Articulation = scene["unitree"]
-    num_joints = len(robot.data.joint_names)
-
-    sim_dt = sim.get_physics_dt()
-
-    action_steps = [0.2, 0.1, 0.05, 0.01]
-
-
-    # check each individual joint
-    for i, joint_name in enumerate(robot.data.joint_names):
-        print("Joint experiments:", joint_name)
-        # try different changings of action steps to see dynamics
-        for action_step in action_steps:
-            print("Action Step:", action_step)
-
-            print("Reset before new step...")
-            reset_robot(robot)
-            activations = torch.tensor([[0.3] * 2 * num_joints], device=muscle_parameters.muscle_params["device"])
-            activations[:, [i, i + num_joints]] = 0.0
-
-            # give robot some time to find start position
-            for _ in range(300):
-                robot.set_joint_position_target(activations[:, num_joints:])
-                robot.set_joint_velocity_target(activations[:, :num_joints])
-                robot.write_data_to_sim()
-
-                sim.step()
-                scene.update(sim_dt)
-
-            robot.actuators['base_legs'].start_logging()
-            # try all the co-contractions for all steps
-            for a1 in torch.arange(0.0, 1.0 + action_step, action_step):
-                for a2 in torch.arange(0.0, 1.0 + action_step, action_step):
-                    count = 1
-                    activations[:, i] = a2 #extensor
-                    activations[:, i + num_joints] = a1 #flexor
-                    
-                    # give the simulation some time to reach a final state
-                    while simulation_app.is_running:
-                        if count % 250 == 0:
-                            break
-                            
-                        robot.set_joint_position_target(activations[:, num_joints:])
-                        robot.set_joint_velocity_target(activations[:, :num_joints])
-                        robot.write_data_to_sim()
-
-                        sim.step()
-                        scene.update(sim_dt)
-
-                        count += 1
-                
-                print("Reset for new activation loop...")
-                reset_robot(robot)
-                activations = torch.tensor([[0.3] * 2 * num_joints], device=muscle_parameters.muscle_params["device"])
-                activations[:, [i, i + num_joints]] = 0.0
-                for _ in range(300):
-                    robot.set_joint_position_target(activations[:, num_joints:])
-                    robot.set_joint_velocity_target(activations[:, :num_joints])
-                    robot.write_data_to_sim()
-
-                    sim.step()
-                    scene.update(sim_dt)
-                
-            print("Saving results to", f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
-            robot.actuators['base_legs'].save_logs(f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
-            robot.actuators['base_legs'].stop_logging()
-            robot.actuators['base_legs'].reset_logging()
-
 
             
 
 def main():
-
     """Main function."""
     # Load kit helper
     sim_cfg = sim_utils.SimulationCfg(device=args_cli.device)
@@ -233,8 +153,8 @@ def main():
     # Now we are ready!
     print("[INFO]: Setup complete...")
     # Run the simulator
-    run_activation_experiment(sim, scene)
-
+    experiment = ActivationExperiments(sim, scene)
+    experiment.run_experiment()
 
 
 if __name__ == "__main__":

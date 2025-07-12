@@ -1,6 +1,6 @@
 import isaaclab.sim as sim_utils
-from muscle_actuator.muscle_actuator_cfg import MuscleActuatorCfg
-from muscle_actuator.muscle_parameters import muscle_params
+from modules.muscle_actuator.muscle_actuator_cfg import MuscleActuatorCfg
+from modules.muscle_actuator.muscle_parameters import muscle_params
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
