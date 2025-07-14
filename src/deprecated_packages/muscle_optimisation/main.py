@@ -17,8 +17,7 @@ simulation_app = app_launcher.app
 
 import torch
 import math
-from muscle_actuator import muscle_actuator, muscle_actuator_cfg, muscle_parameters
-
+from modules.muscle_actuator.muscle_parameters import muscle_params
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg, Articulation
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
@@ -31,7 +30,7 @@ import numpy as np
 ##
 # Pre-defined configs
 ##
-from robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_MIXED_CFG
+from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_MIXED_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 
 def follow_robot_with_camera(sim: SimulationContext, robot, angle_rad=0.0, radius=3.0, height=1.0):
@@ -77,58 +76,55 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     print(robot.data.joint_names)
     print(robot.data.body_names)
 
-    i1 = 0.0    
+    i1 = 0.0
 
     count = 0
     
-    action = torch.tensor([[0.0] * 24], device=muscle_parameters.muscle_params["device"])
+    action = torch.tensor([[0.0] * 24], device=muscle_params["device"])
 
     while simulation_app.is_running():
         follow_robot_with_camera(sim, robot, angle_rad=90)
 
         if count % 500 == 0:
-            # if i1 > 1.0:
-            #     i1 = 0.0
+            if i1 > 1.0:
+                i1 = 0.0
             
-            # i1 += 0.05
-            root_state = robot.data.default_root_state.clone()
-            print(root_state)
-            robot.write_root_pose_to_sim(root_state[:, :7])
-            robot.write_root_velocity_to_sim(root_state[:, 7:])
-            # set joint positions with some noise
-            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            robot.write_joint_state_to_sim(joint_pos, joint_vel)
-            # clear internal buffers
-            robot.reset()
+            i1 += 0.05
+            # root_state = robot.data.default_root_state.clone()
+            # print(root_state)
+            # robot.write_root_pose_to_sim(root_state[:, :7])
+            # robot.write_root_velocity_to_sim(root_state[:, 7:])
+            # # set joint positions with some noise
+            # joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
+            # robot.write_joint_state_to_sim(joint_pos, joint_vel)
+            # # clear internal buffers
+            # robot.reset()
+
+        idxs, names = robot.find_joints("RR_thigh_joint")
+
+        print(robot.joint_names)
 
         # hip flexor
-        action[:, :4] = 0.3 #extensor
-        action[:, 12:16] = 0.3 #flexor
+        action[:, :4] = 0.3 # extensor
+        action[:, 12:16] = 0.3 # flexor
 
         # thigh
-        action[:, 4:8] =  0.3 #extensor
-        action[:, 16:20] = 0.3 #flexor
+        action[:, 4:8] =  0.3 # extensor
+        action[:, 16:20] = 0.3 # flexor
 
         # calf
-        action[:, 8:12] = 0.3 #extensor
-        action[:, 20:24] = 0.3 #flexor
+        action[:, 8:12] = 0.3 # extensor
+        action[:, 20:24] = 0.3 # flexor
 
-        action[:, [5, 17]] = 0
+        action[:, idxs[0]] = i1
 
         robot.set_joint_position_target(action[:, 12:])
         robot.set_joint_velocity_target(action[:, :12])
         robot.write_data_to_sim()
 
-        print("Names:", robot.data.joint_names)
-        print("Pos:", robot.data.joint_pos[0])
-
         sim.step()
         count += 1
         scene.update(sim_dt)
-
-
-
-            
 
 def main():
     """Main function."""
@@ -136,7 +132,7 @@ def main():
     sim_cfg = sim_utils.SimulationCfg(device=args_cli.device)
     
     # Find a suitable simulator dt for the simulation!!!!!!!!!!!!!
-    sim_cfg.dt = muscle_parameters.muscle_params["dt"]
+    sim_cfg.dt = muscle_params["dt"]
 
     sim_cfg.render_interval = 1
     
@@ -153,9 +149,7 @@ def main():
     # Now we are ready!
     print("[INFO]: Setup complete...")
     # Run the simulator
-    experiment = ActivationExperiments(sim, scene)
-    experiment.run_experiment()
-
+    run_simulator(sim, scene)
 
 if __name__ == "__main__":
     # run the main function

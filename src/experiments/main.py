@@ -15,6 +15,7 @@ simulation_app = app_launcher.app
 
 from modules.muscle_actuator.muscle_parameters import muscle_params
 from experiments.muscles.activations import ActivationExperiments
+from experiments.muscles.vmax_fvmax_tuning import FvmaxExperiment
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -23,6 +24,8 @@ from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 
 from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+
+from isaaclab_assets import UNITREE_GO2_CFG
 
 @configclass
 class UnitreeSceneCfg(InteractiveSceneCfg):
@@ -41,6 +44,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
     )
             
+# ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint']
 
 def main():
     """Main function."""
@@ -65,9 +69,13 @@ def main():
     # Now we are ready!
     print("[INFO]: Setup complete...")
     # Run the simulator
-    experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
-    experiment.run_experiment()
+    
+    #activation_experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
+    #activation_experiment.run_experiment()
 
+    fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
+    fv_v_optim_experiment.run_experiment()
+    
 
 if __name__ == "__main__":
     # run the main function

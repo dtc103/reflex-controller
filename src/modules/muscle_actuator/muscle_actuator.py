@@ -26,17 +26,9 @@ class MuscleActuator(ActuatorBase):
         for key, value in self.muscle_params.items():
             setattr(self, key, value)
 
-        self.phi_min = torch.tensor(
-            self.angles[:, 0].clone().detach(), 
-            device=self.device, 
-            requires_grad=False
-        )
+        self.phi_min = self.angles[:, 0].detach().clone().requires_grad_(False).to(self.device)
         
-        self.phi_max = torch.tensor(
-            self.angles[:, 1].clone().detach(), 
-            device=self.device, 
-            requires_grad=False
-        )
+        self.phi_max = self.angles[:, 1].detach().clone().requires_grad_(False).to(self.device)
 
         self.activation_tensor = torch.zeros(
             (self._num_envs, self.num_joints * 2),
@@ -51,12 +43,14 @@ class MuscleActuator(ActuatorBase):
             device=self.device,
             requires_grad=False,
         )
+
         self.lce_dot_tensor = torch.zeros(
             (self._num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
             requires_grad=False,
         )
+
         self.force_tensor = torch.zeros(
             (self._num_envs, self.num_joints * 2),
             dtype=torch.float32,
