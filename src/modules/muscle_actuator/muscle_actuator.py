@@ -334,17 +334,22 @@ class MuscleActuator(ActuatorBase):
         self.is_logging = True
 
     def save_logs(self, file_path="data/logs.pkl"):
+        self.pause_logging()
         if self.is_logging:
             save_dir = os.path.dirname(file_path)
             os.makedirs(save_dir, exist_ok=True)
             with open(file_path, 'wb') as f:
                 pickle.dump(self.log, f)
+        self.continue_logging()
 
     def reset_logging(self):
         self.log.clear()
 
-    def stop_logging(self):
+    def pause_logging(self):
         self.is_logging = False
+
+    def continue_logging(self):
+        self.is_logging = True
 
     def reset(self, *args, **kwargs):
         pass

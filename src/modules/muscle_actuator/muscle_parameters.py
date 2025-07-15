@@ -3,8 +3,8 @@ import torch
 muscle_params = {
     "lmin": 0.24,
     "lmax": 1.53,
-    "fvmax": 2.0,
-    "vmax": 5,
+    "fvmax": 1.5,
+    "vmax": 4.5,
     "fpmax": 1.76,
     "fmin": 0.1,
     "lce_max": 1.0,
