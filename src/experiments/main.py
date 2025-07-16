@@ -25,6 +25,8 @@ from isaaclab.utils import configclass
 
 from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+
 from isaaclab_assets import UNITREE_GO2_CFG
 
 @configclass
@@ -45,6 +47,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
             
 # ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint']
+
 
 def main():
     """Main function."""
@@ -70,11 +73,11 @@ def main():
     print("[INFO]: Setup complete...")
     # Run the simulator
     
-    #activation_experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
-    #activation_experiment.run_experiment()
+    activation_experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
+    activation_experiment.run_experiment()
 
-    fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
-    fv_v_optim_experiment.run_experiment()
+    #fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
+    #fv_v_optim_experiment.run_experiment()
     
 
 if __name__ == "__main__":

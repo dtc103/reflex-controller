@@ -27,7 +27,7 @@ class ActivationExperiments(BaseExperiment):
 
         self.robot.reset()
 
-        self.run_sim_for_steps(300)
+        self.run_sim_for_steps(500)
 
     def reset_activations(self):
         self.activations = self.default_activations.detach().clone()
@@ -63,16 +63,20 @@ class ActivationExperiments(BaseExperiment):
                         self.activations[:, i + self.num_joints] = a1 # flexor
                         
                         self.run_sim_for_steps(300)
+
+                    
                     
                     print("Reset for new activation loop...")
+                    self.robot.actuators['base_legs'].pause_logging()
                     self.reset_activations()
                     self.activations[:, [i, i + self.num_joints]] = 0.0
 
                     self.reset_robot()
+                    self.robot.actuators['base_legs'].continue_logging()
                     
                 print("Saving results to", f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
                 self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
-                self.robot.actuators['base_legs'].stop_logging()
+                self.robot.actuators['base_legs'].pause_logging()
                 self.robot.actuators['base_legs'].reset_logging()
 
         print("Experiment finished")
