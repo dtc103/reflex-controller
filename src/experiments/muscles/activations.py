@@ -48,7 +48,6 @@ class ActivationExperiments(BaseExperiment):
             print("Joint experiments:", joint_name)
             # try different changings of action steps to see dynamics
 
-
             for action_step in tqdm(self.action_steps, desc="Joint Loop", position=0):
                 self.reset_activations()
                 self.activations[:, [i, i + self.num_joints]] = 0.0
