@@ -1,6 +1,7 @@
 from isaaclab.assets import Articulation
 import torch
 from ..base_experiment import BaseExperiment
+from tqdm import tqdm
 
 class ActivationExperiments(BaseExperiment):
     def __init__(self, simulation_app, sim, scene, muscle_parameters):
@@ -46,10 +47,9 @@ class ActivationExperiments(BaseExperiment):
         for i, joint_name in enumerate(self.robot.data.joint_names):
             print("Joint experiments:", joint_name)
             # try different changings of action steps to see dynamics
-            for action_step in self.action_steps:
-                print("Action Step:", action_step)
-                print("Reset before new step...")
 
+
+            for action_step in tqdm(self.action_steps, desc="Joint Loop", position=0):
                 self.reset_activations()
                 self.activations[:, [i, i + self.num_joints]] = 0.0
 
@@ -57,16 +57,13 @@ class ActivationExperiments(BaseExperiment):
 
                 self.robot.actuators['base_legs'].start_logging()
                 # try all the co-contractions for all steps
-                for a1 in torch.arange(0.0, 1.0 + action_step, action_step):
-                    for a2 in torch.arange(0.0, 1.0 + action_step, action_step):
+                for a1 in tqdm(torch.arange(0.0, 1.0 + action_step, action_step), desc="Flexor actions", position=1, leave=False):
+                    for a2 in tqdm(torch.arange(0.0, 1.0 + action_step, action_step), desc="Extensor actions", position=2, leave=False):
                         self.activations[:, i] = a2 # extensor
                         self.activations[:, i + self.num_joints] = a1 # flexor
                         
                         self.run_sim_for_steps(300)
 
-                    
-                    
-                    print("Reset for new activation loop...")
                     self.robot.actuators['base_legs'].pause_logging()
                     self.reset_activations()
                     self.activations[:, [i, i + self.num_joints]] = 0.0
@@ -74,7 +71,6 @@ class ActivationExperiments(BaseExperiment):
                     self.reset_robot()
                     self.robot.actuators['base_legs'].continue_logging()
                     
-                print("Saving results to", f"data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
                 self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
                 self.robot.actuators['base_legs'].pause_logging()
                 self.robot.actuators['base_legs'].reset_logging()
