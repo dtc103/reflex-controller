@@ -18,7 +18,7 @@ from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 
 from modules.mdp.actions import MuscleActionCfg
 
-from isaaclab_tasks.manager_based.locomotion.velocity.mdp import joint_pos, joint_vel, last_action
+from isaaclab_tasks.manager_based.locomotion.velocity.mdp import joint_pos, joint_vel, last_action, reset_joints_by_offset
 
 import torch
 
@@ -39,6 +39,9 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
+@configclass
+class CommandsCfg:
+    position_command = 
 
 @configclass
 class ActionsCfg:
@@ -62,7 +65,14 @@ class ObservationsCfg:
 
 @configclass
 class EventCfg:
-    pass
+    reset_joints = EventTerm(
+        func=reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-0.5, 0.5),
+            "velocity_range": (-0.5, 0.5)
+        }
+    )
 
 @configclass
 class RewardsCfg:
