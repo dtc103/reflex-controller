@@ -26,6 +26,8 @@ class MuscleActuator(ActuatorBase):
         for key, value in self.muscle_params.items():
             setattr(self, key, value)
 
+        self.angles = torch.tensor(self.angles, device=self.device)
+
         self.phi_min = self.angles[:, 0].detach().clone().requires_grad_(False).to(self.device)
         
         self.phi_max = self.angles[:, 1].detach().clone().requires_grad_(False).to(self.device)

@@ -1,0 +1,1 @@
+['base', 'FL_hip', 'FR_hip', 'Head_upper', 'RL_hip', 'RR_hip', 'FL_thigh', 'FR_thigh', 'Head_lower', 'RL_thigh', 'RR_thigh', 'FL_calf', 'FR_calf', 'RL_calf', 'RR_calf', 'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']

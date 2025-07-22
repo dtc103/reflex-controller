@@ -76,6 +76,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     print(robot.data.joint_names)
     print(robot.data.body_names)
 
+    quit()
+
     i1 = 0.0
 
     count = 0

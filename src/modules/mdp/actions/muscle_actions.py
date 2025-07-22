@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 
 from typing import TYPE_CHECKING
@@ -8,19 +10,16 @@ from isaaclab.managers.action_manager import ActionTerm
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
-    from . import actions_cfg
+    from .actions_cfg import MuscleActionCfg
 
 
 class MuscleAction(ActionTerm):
-    cfg: actions_cfg.MuscleActionCfg
+    cfg: MuscleActionCfg
     _asset: Articulation
-    _scale: torch.Tensor | float
-    _offset: torch.Tensor | float
     _clip: torch.Tensor
 
-    def __init__(self, cfg: actions_cfg.MuscleActionCfg, env: ManagerBasedEnv) -> None:
+    def __init__(self, cfg: MuscleActionCfg, env: ManagerBasedEnv) -> None:
         super().__init__(cfg, env)
-
         self._joint_ids, self._joint_names = self._asset.find_joints(self.cfg.joint_names, preserve_order=self.cfg.preserve_order)
         self._num_joints = len(self._joint_ids)
 
@@ -58,7 +57,7 @@ class MuscleAction(ActionTerm):
     
     def process_actions(self, actions: torch.Tensor):
         self._raw_actions[:] = actions
-        self._processed_actions = self.raw_actions * self._scale + self._offset
+        self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset
 
         if self.cfg.clip is not None:
             self._processed_actions = torch.clamp(

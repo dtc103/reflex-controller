@@ -17,9 +17,10 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 
 from modules.mdp.actions import MuscleActionCfg
+from modules.mdp.commands import ReachPositionCommandCfg
+from modules.mdp.rewards import *
 
-from isaaclab_tasks.manager_based.locomotion.velocity.mdp import joint_pos, joint_vel, last_action, reset_joints_by_offset
-
+import isaaclab.envs.mdp as mdp
 import torch
 
 @configclass
@@ -35,26 +36,33 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
+    robot: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
 @configclass
 class CommandsCfg:
-    position_command = 
+    position_command = ReachPositionCommandCfg(
+        asset_name="robot",
+        debug_vis=True,
+        resampling_time_range=(10.0, 10.0)
+    )
 
 @configclass
 class ActionsCfg:
-    muscle_activation = MuscleActionCfg(asset_name="robot", joint_names=["*"])
+    muscle_activation = MuscleActionCfg(asset_name="robot", joint_names=[".*"])
 
 @configclass
 class ObservationsCfg:
     @configclass
     class PolicyCfg(ObsGroup):
-        joint_position = ObsTerm(func=joint_pos, noise=Unoise(n_min=-0.01, u_max=0.01))
-        joint_velocity = ObsTerm(func=joint_vel, noise=Unoise(n_min=-1.0, n_max=1.0))
-        actions = ObsTerm(func=last_action)
-        #TODO add command here as well
+        joint_position = ObsTerm(func=mdp.joint_pos, noise=Unoise(n_min=-0.01, n_max=0.01))
+        joint_velocity = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-1.0, n_max=1.0))
+        actions = ObsTerm(func=mdp.last_action)
+        position_command = ObsTerm(
+            func=mdp.generated_commands, 
+            params={"command_name": "position_command"}
+        )
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -66,7 +74,7 @@ class ObservationsCfg:
 @configclass
 class EventCfg:
     reset_joints = EventTerm(
-        func=reset_joints_by_offset,
+        func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
             "position_range": (-0.5, 0.5),
@@ -76,25 +84,44 @@ class EventCfg:
 
 @configclass
 class RewardsCfg:
-    pass
+    goal_position_reach = RewTerm(
+        func=reach_position_reward,
+        params={
+            "command_name": "position_command",
+            "std": 0.1
+        },
+        weight=1.0
+    )
+
+    action_reg = RewTerm(
+        func=action_regularization_reward,
+        weight=0.5
+    )
 
 @configclass
 class TerminationsCfg:
-    pass
+    time_out = DoneTerm(
+        func=mdp.time_out, 
+        time_out=True
+    )
 
 @configclass
-class ReachingMuscleGo2(ManagerBasedRLEnvCfg):
+class ReachingMuscleGo2Cfg(ManagerBasedRLEnvCfg):
     scene: UnitreeSceneCfg = UnitreeSceneCfg(num_envs=4096, env_spacing=4.0)
 
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
+    commands: CommandsCfg = CommandsCfg()
     events: EventCfg = EventCfg()
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
         self.decimation = 2
-        self.episode_length_s = 10
+        self.episode_length_s = 20
         
         self.sim.dt = 1/500
         self.sim.render_interval = self.decimation
+
+        self.scene.robot.spawn.articulation_props.fix_root_link = True
+        self.scene.robot.init_state.pos = (0.0, 0.0, 1.0)
