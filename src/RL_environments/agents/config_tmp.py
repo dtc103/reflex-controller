@@ -6,11 +6,13 @@
 from isaaclab.utils import configclass
 
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from modules.muscle_actuator.muscle_parameters import muscle_params
+import torch
 
 
 @configclass
 class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 35
+    num_steps_per_env = int(0.4 / muscle_params["dt"]) # steps that are necessary to get 0.4 sec of rollout
     max_iterations = 1500
     save_interval = 50
     experiment_name = "unitree_go2_muscle_reach"
@@ -25,13 +27,13 @@ class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,
+        entropy_coef=0.005,
         num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
+        learning_rate=1.0e-4,
         schedule="adaptive",
-        gamma=0.995,
+        gamma=torch.e ** (-muscle_params["dt"] / 3.0), # we want effect horizon of ~3.0 secs. This is how we calculate gamma then
         lam=0.95,
-        desired_kl=0.01,
+        desired_kl=0.005,
         max_grad_norm=1.0,
     )

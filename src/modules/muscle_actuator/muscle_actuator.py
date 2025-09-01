@@ -271,7 +271,7 @@ class MuscleActuator(ActuatorBase):
             axis=-2,
         )
 
-    def compute(self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel) -> ArticulationActions:
+    def compute(self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor) -> ArticulationActions:
         """
         actuator_pos: Current position of actuator
         """
@@ -279,12 +279,12 @@ class MuscleActuator(ActuatorBase):
         # since isaac lab does not allow the definition of own input items, we just 
         # act like the inputted control_action.joint_positions contain the muscle activations for one muscle of each joint
         # and control_action.joint_velocities the activations of the other muscles of the joint
-        muscle_activations_1 = control_action.joint_positions
-        muscle_activations_2 = control_action.joint_velocities
+        muscle_activations_1 = control_action.joint_positions# flexor
+        muscle_activations_2 = control_action.joint_velocities # extensor
         muscle_activations = torch.concatenate([muscle_activations_1, muscle_activations_2], dim=1)
 
         with torch.no_grad():
-            actions = torch.clip(muscle_activations, 0, 1)
+            actions = torch.clip(muscle_activations, min=0.0, max=1.0)
 
             if self.is_logging:
                 self.log["joint_position"].append(joint_pos.detach().cpu().numpy())
@@ -336,13 +336,14 @@ class MuscleActuator(ActuatorBase):
         self.is_logging = True
 
     def save_logs(self, file_path="data/logs.pkl"):
-        self.pause_logging()
         if self.is_logging:
+            self.pause_logging()
             save_dir = os.path.dirname(file_path)
             os.makedirs(save_dir, exist_ok=True)
             with open(file_path, 'wb') as f:
                 pickle.dump(self.log, f)
-        self.continue_logging()
+                print("DUMPED THE PICKLE")
+        self.resume_logging()
 
     def reset_logging(self):
         self.log.clear()
@@ -350,7 +351,7 @@ class MuscleActuator(ActuatorBase):
     def pause_logging(self):
         self.is_logging = False
 
-    def continue_logging(self):
+    def resume_logging(self):
         self.is_logging = True
 
     def reset(self, *args, **kwargs):

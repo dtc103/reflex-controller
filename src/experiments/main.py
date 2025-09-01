@@ -27,8 +27,6 @@ from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
-from isaaclab_assets import UNITREE_GO2_CFG
-
 @configclass
 class UnitreeSceneCfg(InteractiveSceneCfg):
     """Configuration for a cart-pole scene."""
@@ -45,9 +43,6 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
-            
-# ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint']
-
 
 def main():
     """Main function."""

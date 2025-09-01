@@ -2,6 +2,7 @@ from isaaclab.assets import Articulation
 import torch
 from ..base_experiment import BaseExperiment
 from tqdm import tqdm
+from datetime import datetime
 
 class ActivationExperiments(BaseExperiment):
     def __init__(self, simulation_app, sim, scene, muscle_parameters):
@@ -28,15 +29,15 @@ class ActivationExperiments(BaseExperiment):
 
         self.robot.reset()
 
-        self.run_sim_for_steps(500)
+        self.run_sim_for_s(1)
 
     def reset_activations(self):
         self.activations = self.default_activations.detach().clone()
 
-    def run_sim_for_steps(self, steps):
-        for _ in range(steps):
-            self.robot.set_joint_position_target(self.activations[:, self.num_joints:])
-            self.robot.set_joint_velocity_target(self.activations[:, :self.num_joints])
+    def run_sim_for_s(self, s):
+        for _ in range(int(s // self.sim_dt)):
+            self.robot.set_joint_position_target(self.activations[:, :self.num_joints]) #flexor input
+            self.robot.set_joint_velocity_target(self.activations[:, self.num_joints:]) # extensor input
             self.robot.write_data_to_sim()
 
             self.sim.step()
@@ -58,19 +59,20 @@ class ActivationExperiments(BaseExperiment):
                 # try all the co-contractions for all steps
                 for a1 in tqdm(torch.arange(0.0, 1.0 + action_step, action_step), desc="Flexor actions", position=1, leave=False):
                     for a2 in tqdm(torch.arange(0.0, 1.0 + action_step, action_step), desc="Extensor actions", position=2, leave=False):
-                        self.activations[:, i] = a2 # extensor
-                        self.activations[:, i + self.num_joints] = a1 # flexor
+                        self.activations[:, i] = a1
+                        self.activations[:, i + self.num_joints] = a2
                         
-                        self.run_sim_for_steps(300)
+                        self.run_sim_for_s(1.0)
 
                     self.robot.actuators['base_legs'].pause_logging()
                     self.reset_activations()
                     self.activations[:, [i, i + self.num_joints]] = 0.0
 
                     self.reset_robot()
-                    self.robot.actuators['base_legs'].continue_logging()
+                    self.robot.actuators['base_legs'].resume_logging()
                     
-                self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/co_contraction_experiment/{joint_name}_{action_step}.pkl")
+                self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/co_contraction_experiment/{joint_name}_{action_step}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}.pkl")
+                print("Saving")
                 self.robot.actuators['base_legs'].pause_logging()
                 self.robot.actuators['base_legs'].reset_logging()
 

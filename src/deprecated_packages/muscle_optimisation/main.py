@@ -30,7 +30,7 @@ import numpy as np
 ##
 # Pre-defined configs
 ##
-from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_MIXED_CFG
+from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 
 def follow_robot_with_camera(sim: SimulationContext, robot, angle_rad=0.0, radius=3.0, height=1.0):
@@ -76,8 +76,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     print(robot.data.joint_names)
     print(robot.data.body_names)
 
-    quit()
-
     i1 = 0.0
 
     count = 0
@@ -85,43 +83,31 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     action = torch.tensor([[0.0] * 24], device=muscle_params["device"])
 
     while simulation_app.is_running():
-        follow_robot_with_camera(sim, robot, angle_rad=90)
+        #follow_robot_with_camera(sim, robot, angle_rad=90)
 
         if count % 500 == 0:
             if i1 > 1.0:
                 i1 = 0.0
             
             i1 += 0.05
-            # root_state = robot.data.default_root_state.clone()
-            # print(root_state)
-            # robot.write_root_pose_to_sim(root_state[:, :7])
-            # robot.write_root_velocity_to_sim(root_state[:, 7:])
-            # # set joint positions with some noise
-            # joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            # robot.write_joint_state_to_sim(joint_pos, joint_vel)
-            # # clear internal buffers
-            # robot.reset()
+            for i, _ in enumerate(robot.joint_names):
+                print(robot.joint_names[i], ":", robot.data.joint_pos[:, i].item())
 
-        idxs, names = robot.find_joints("RR_thigh_joint")
+            root_state = robot.data.default_root_state.clone()
+            robot.write_root_pose_to_sim(root_state[:, :7])
+            robot.write_root_velocity_to_sim(root_state[:, 7:])
+            # set joint positions
+            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
+            robot.write_joint_state_to_sim(joint_pos, joint_vel)
+            # clear internal buffers
+            robot.reset()
 
-        print(robot.joint_names)
 
-        # hip flexor
-        action[:, :4] = 0.3 # extensor
-        action[:, 12:16] = 0.3 # flexor
+        action[:, :12] = 1.0
 
-        # thigh
-        action[:, 4:8] =  0.3 # extensor
-        action[:, 16:20] = 0.3 # flexor
+        robot.set_joint_position_target(action[:, :12])
+        robot.set_joint_velocity_target(action[:, 12:])
 
-        # calf
-        action[:, 8:12] = 0.3 # extensor
-        action[:, 20:24] = 0.3 # flexor
-
-        action[:, idxs[0]] = i1
-
-        robot.set_joint_position_target(action[:, 12:])
-        robot.set_joint_velocity_target(action[:, :12])
         robot.write_data_to_sim()
 
         sim.step()
@@ -140,10 +126,18 @@ def main():
     
     sim = SimulationContext(sim_cfg)
     # Set main camera
-    sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
+    sim.set_camera_view([-3.0, 0.0, 2.0], [0.0, 0.0, 0.5])
     # Design scene
     scene_cfg = UnitreeSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0)
     scene_cfg.unitree.spawn.articulation_props.fix_root_link = True
+    # scene_cfg.unitree.init_state.pos = (0.0, 0.0, 0.10)
+    # scene_cfg.unitree.init_state.joint_pos = {
+    #     ".*L_hip_joint": 0.3,
+    #     ".*R_hip_joint": -0.3,
+    #     "F[L,R]_thigh_joint": torch.pi/2.0 - 0.5,
+    #     "R[L,R]_thigh_joint": torch.pi/2.0 - 0.5,
+    #     ".*_calf_joint": -2.7,
+    # }
     
     scene = InteractiveScene(cfg=scene_cfg)
     # Play the simulator

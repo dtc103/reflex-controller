@@ -16,25 +16,32 @@ def reach_position_reward(
     command_name: str, 
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     std: float = 0.1,
-    body_parts: list[str] = [".*_foot"]
-) -> torch.Tensor:    
+    body_parts: list[str] = ["FL_foot"],
+    goal_tolerance = 0.025
+) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
 
     foot_idxs, _ = asset.find_bodies(body_parts)
     foot_positions = asset.data.body_pos_w[:, foot_idxs, :]
 
-    goal_positions = env.command_manager.get_command(command_name) # has shape (env, 12) -> need to be adapted
+    goal_positions = env.command_manager.get_command(command_name).view(env.num_envs, len(foot_idxs), 3) # has shape (env, n_feet * 3) -> need to be adapted to (env, n_feet, 3)
     
     # squared euclidian norm
-    distances = torch.sum((goal_positions.view(env.num_envs, len(foot_idxs), 3) - foot_positions) ** 2, dim=-1)
+    distances = torch.sum((goal_positions - foot_positions) ** 2, dim=-1)
 
     total_error = distances.sum(dim=1)
 
-    reward = torch.exp(-total_error / (std ** 2))
+    # give an extra boost of the reward, if it reaches the goal
+    #reached_goal = torch.sum((distances < goal_tolerance).int()) / env.num_envs
+
+    reward = torch.exp(-total_error / (std ** 2))# + reached_goal
+
     return reward
 
 def action_regularization_reward(
     env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    joint_names: list[str] = [".*"]
 ) -> torch.Tensor:
     '''
     This action regularization is taken from 
@@ -46,5 +53,15 @@ def action_regularization_reward(
     reward = -l1 - l2
 
     return reward
+
+def base_height(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward higher body position
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    return torch.square(asset.data.root_pos_w[:, 2])
 
 

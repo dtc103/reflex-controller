@@ -2,6 +2,7 @@ from isaaclab.assets import Articulation
 import torch
 from ..base_experiment import BaseExperiment
 from tqdm import tqdm
+from datetime import datetime
 
 class FvmaxExperiment(BaseExperiment):
     def __init__(self, simulation_app, sim, scene, muscle_parameters):
@@ -74,8 +75,8 @@ class FvmaxExperiment(BaseExperiment):
                         self.mode = 1 - self.mode
 
 
-                    #print("Saving results to", f"data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}.pkl")
-                    self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}.pkl")
+                    #print("Saving results to", f"data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}_<curr_time>.pkl")
+                    self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}.pkl")
                     self.robot.actuators['base_legs'].stop_logging()
                     self.robot.actuators['base_legs'].reset_logging()
 

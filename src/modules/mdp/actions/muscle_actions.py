@@ -59,10 +59,11 @@ class MuscleAction(ActionTerm):
         self._raw_actions[:] = actions
         self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset
 
-        if self.cfg.clip is not None:
-            self._processed_actions = torch.clamp(
-                self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
-            )
+        self._processed_actions = self._processed_actions.clamp(0, 1)
+        # if self.cfg.clip is not None:
+        #     self._processed_actions = torch.clamp(
+        #         self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
+        #     )
 
     def apply_actions(self):
         self._asset.set_joint_position_target(self.processed_actions[:, :self._num_joints])
