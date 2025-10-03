@@ -45,7 +45,7 @@ class CommandsCfg:
     position_command = ReachPositionCommandCfg(
         asset_name="robot",
         debug_vis=True,
-        resampling_time_range=(10.0, 10.0)
+        resampling_time_range=(5.0, 5.0)
     )
 
 @configclass
@@ -93,20 +93,20 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot"),
-            "mass_distribution_params": (0.0, 5.0),
+            "mass_distribution_params": (0.0, 2.0),
             "operation": "add"
         }
     )
 
-    external_force_torque = EventTerm(
-        func=mdp.apply_external_force_torque,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "force_range": (0.0, 0.0),
-            "torque_range": (-1.0, 1.0)
-        }
-    )
+    # external_force_torque = EventTerm(
+    #     func=mdp.apply_external_force_torque,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "force_range": (0.0, 0.0),
+    #         "torque_range": (-1.0, 1.0)
+    #     }
+    # )
 
 @configclass
 class RewardsCfg:
@@ -114,10 +114,10 @@ class RewardsCfg:
         func=reach_position_reward,
         params={
             "command_name": "position_command",
-            "std": 0.4,
+            "std": 0.3,
             "body_parts": body_parts
         },
-        weight=5.0
+        weight=1.0
     )
 
     # action_reg = RewTerm(
@@ -144,7 +144,7 @@ class ReachingMuscleGo2Cfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        self.decimation = 8
+        self.decimation = 5
         self.episode_length_s = 10
         
         self.sim.dt = self.scene.robot.actuators["base_legs"].muscle_params["dt"]

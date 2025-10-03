@@ -57,9 +57,9 @@ class MuscleAction(ActionTerm):
     
     def process_actions(self, actions: torch.Tensor):
         self._raw_actions[:] = actions
-        self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset
+        self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset # self.cfg.scale will be 0.5 and self.cfg.offset also 0.5
 
-        self._processed_actions = self._processed_actions.clamp(0, 1)
+        self._processed_actions = self._processed_actions.clamp(min=0, max=1)
         # if self.cfg.clip is not None:
         #     self._processed_actions = torch.clamp(
         #         self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
@@ -70,5 +70,8 @@ class MuscleAction(ActionTerm):
         self._asset.set_joint_velocity_target(self.processed_actions[:, self._num_joints:])
 
     def reset(self, env_ids: Sequence | None = None) -> None:
-        self._raw_actions[env_ids] = 0.0
+        if env_ids is None:
+            self._raw_actions.zero_()
+        else:
+            self._raw_actions[env_ids] = 0.0
             
