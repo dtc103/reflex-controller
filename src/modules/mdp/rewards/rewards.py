@@ -46,7 +46,7 @@ def reach_position_reward_goal_sparse(
     foot_positions = asset.data.body_pos_w[:, foot_idxs, :]
 
     goal_positions = env.command_manager.get_command(command_name).view(env.num_envs, len(foot_idxs), 3) # has shape (env, n_feet * 3) -> need to be adapted to (env, n_feet, 3)
-
+    
     distances = torch.sqrt(torch.sum((goal_positions - foot_positions) ** 2, dim=-1))
 
     reached_goal = (distances < goal_tolerance).float()
