@@ -58,7 +58,7 @@ class MuscleAction(ActionTerm):
     def process_actions(self, actions: torch.Tensor):
         self._raw_actions[:] = actions
         self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset # self.cfg.scale will be 0.5 and self.cfg.offset also 0.5
-
+        #print(self._processed_actions)
         self._processed_actions = self._processed_actions.clamp(min=0, max=1)
         # if self.cfg.clip is not None:
         #     self._processed_actions = torch.clamp(

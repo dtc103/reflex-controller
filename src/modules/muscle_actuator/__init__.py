@@ -1,3 +1,3 @@
 from .muscle_actuator import MuscleActuator
 from .muscle_actuator_cfg import MuscleActuatorCfg
-from .muscle_parameters import muscle_params
+from .muscle_actuator_parameters import muscle_params

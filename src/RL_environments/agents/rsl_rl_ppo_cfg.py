@@ -10,7 +10,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 120
+    num_steps_per_env = 80 #0.8 secs of rollout
     max_iterations = 1500
     save_interval = 50
     experiment_name = "unitree_go2_muscle_reach"
@@ -18,9 +18,9 @@ class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
         #noise_std_type = "log",
-        actor_hidden_dims=[512, 256, 128],
-        critic_hidden_dims=[512, 256, 128],
-        activation="elu",
+        actor_hidden_dims=[1024, 512, 256],
+        critic_hidden_dims=[1024, 512, 256],
+        activation="relu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
@@ -29,9 +29,9 @@ class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         entropy_coef=0.01,
         num_learning_epochs=6,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
+        learning_rate=1.0e-4,
         schedule="adaptive",
-        gamma=0.995,
+        gamma=0.993,
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,

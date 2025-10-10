@@ -9,6 +9,7 @@ from isaaclab.utils import configclass
 from isaaclab.assets import Articulation
 from isaaclab.markers.config import POSITION_GOAL_MARKER_CFG
 from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
+import re
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -19,7 +20,7 @@ class ReachPositionCommand(CommandTerm):
 
     def __init__(self, cfg: ReachPositionCommandCfg, env: ManagerBasedRLEnv):
         self._robot: Articulation = env.scene[cfg.asset_name]
-        self._hip_body_ids, _ = self._robot.find_bodies(["FL_hip"], preserve_order=True) #order: (FL, FR, RL, RR)
+        self._hip_body_ids, self._hip_body_names = self._robot.find_bodies(cfg.body_names, preserve_order=True) #order: (FL, FR, RL, RR)
         self._num_hips = len(self._hip_body_ids)
 
         super().__init__(cfg, env)
@@ -27,12 +28,10 @@ class ReachPositionCommand(CommandTerm):
         self._desired_pos_w = torch.zeros(self.num_envs, len(self._hip_body_ids) * 3, device=self.device)
         self._reached = torch.zeros(self.num_envs, len(self._hip_body_ids), dtype=torch.bool, device=self.device)
 
-        pattern = torch.tensor([[1, 1, 1],
-                                [1, -1, 1],
-                                [1, 1, 1],
-                                [1, -1, 1]], device=self.device)
-        self._outward_directions = pattern[:self._num_hips, :]
-
+        # defines, if the spheres are right or left of the body (-1 is right, 1 is left)
+        is_R_part_re = re.compile(r"^.R_.*")
+        self._directions = torch.tensor([-1 if is_R_part_re.match(body_name) else 1 for body_name in self._hip_body_names], device=self.device)
+        
         #TODO implement still
         #self.metrics["goal_distance"] = torch.zeros(self.num_envs, device=self.device)
 
@@ -47,8 +46,9 @@ class ReachPositionCommand(CommandTerm):
         if env_ids is None:
             env_ids = slice(None)
 
+
         hip_pos_w = self._robot.data.body_pos_w[env_ids][:, self._hip_body_ids, :]
-        env_count = hip_pos_w.shape[0]
+        env_count = len(env_ids)
 
         r0, r1 = self.cfg.radius_range
         u = torch.rand(env_count, self._num_hips, device=self.device)
@@ -57,12 +57,11 @@ class ReachPositionCommand(CommandTerm):
         theta = 2.0 * torch.pi * torch.rand(env_count, self._num_hips, device=self.device)
         phi = 0.5 * torch.pi * torch.rand(env_count, self._num_hips, device=self.device)
 
-        xs = radii * torch.sin(phi) * torch.cos(theta)
-        ys = radii * torch.cos(phi)
-        zs = radii * torch.sin(phi) * torch.sin(theta)
+        xs = radii * torch.sin(phi) * torch.sin(theta)
+        ys = radii * torch.cos(phi) * self._directions
+        zs = radii * torch.sin(phi) * torch.cos(theta)
 
         offsets = torch.stack([xs, ys, zs], dim=2)
-        offsets = offsets * self._outward_directions.unsqueeze(0)
 
         goal_pos = hip_pos_w + offsets
         self._desired_pos_w[env_ids] = goal_pos.reshape(env_count, self._num_hips * 3)
@@ -100,9 +99,6 @@ class ReachPositionCommand(CommandTerm):
         foot_idxs, _ = self._robot.find_bodies(["FL_foot"], preserve_order=True)
 
         foot_positions = self._robot.data.body_pos_w[:, foot_idxs, :]
-
-        #print(self._desired_pos_w.shape)
-        #print(foot_positions.shape)
 
         #euclidian distance
         distances = torch.norm((self._desired_pos_w.view(self.num_envs, self._num_hips, 3) - foot_positions), dim=-1)

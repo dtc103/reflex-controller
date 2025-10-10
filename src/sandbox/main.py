@@ -17,15 +17,17 @@ simulation_app = app_launcher.app
 
 import torch
 import math
-from modules.muscle_actuator.muscle_parameters import muscle_params
+from modules.muscle_actuator.muscle_actuator_parameters import muscle_params
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg, Articulation
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg, Articulation, AssetBase
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 
 ##
 # Pre-defined configs
@@ -68,6 +70,19 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     # Extract scene entities
     # note: we only do this here for readability.
     robot:Articulation = scene["unitree"]
+    marker = VisualizationMarkers(
+        VisualizationMarkersCfg(
+            prim_path="/Visuals/markers",
+            markers={
+                "sphere":sim_utils.SphereCfg(
+                    radius=0.05,
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=(1.0, 0.0, 0.0)
+                    )
+                )
+            }
+        )
+    )
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     print(sim_dt)
@@ -94,7 +109,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
                 print(robot.joint_names[i], ":", robot.data.joint_pos[:, i].item())
 
             root_state = robot.data.default_root_state.clone()
-            robot.write_root_pose_to_sim(root_state[:, :7])
+            #root_state[:, 0] = count // 500
+            #robot.write_root_pose_to_sim(root_state[:, :7])
             robot.write_root_velocity_to_sim(root_state[:, 7:])
             # set joint positions
             joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
@@ -102,11 +118,25 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # clear internal buffers
             robot.reset()
 
-
-        action[:, :12] = 1.0
-
         robot.set_joint_position_target(action[:, :12])
         robot.set_joint_velocity_target(action[:, 12:])
+
+        #robot.data.root_state_w[:, 2] = count / 100
+        #vel = torch.zeros(scene.num_envs, 6, device=muscle_params["device"])
+        #vel[:, 5] = 1.0
+        #robot.write_root_velocity_to_sim(vel)
+
+        #print(robot.data.root_state_w[0, :3].unsqueeze(0).shape)
+        #get shoulder
+        # idx, _ = robot.find_bodies("FR_hip")
+        # marker_pos = robot.data.body_pos_w[0, idx[0], :3].unsqueeze(0)
+        # marker_pos[0, 1] = count / 1000.0
+        # marker.visualize(robot.data.body_pos_w[0, idx[0], :3].unsqueeze(0))
+
+        print("True")
+        print(robot.find_bodies(['FL_thigh', 'FL_hip', 'FR_hip', 'Head_upper', 'RL_hip'], preserve_order=True))
+        print("False")
+        print(robot.find_bodies(['FL_thigh', 'FL_hip', 'FR_hip', 'Head_upper', 'RL_hip'], preserve_order=False))
 
         robot.write_data_to_sim()
 

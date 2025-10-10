@@ -6,7 +6,7 @@
 from isaaclab.utils import configclass
 
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
-from modules.muscle_actuator.muscle_parameters import muscle_params
+from modules.muscle_actuator.muscle_actuator_parameters import muscle_params
 import torch
 
 
@@ -28,7 +28,7 @@ class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         use_clipped_value_loss=True,
         clip_param=0.2,
         entropy_coef=0.005,
-        num_learning_epochs=5,
+        num_learning_epochs=6,
         num_mini_batches=4,
         learning_rate=1.0e-4,
         schedule="adaptive",

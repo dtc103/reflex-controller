@@ -1,10 +1,8 @@
 import isaaclab.sim as sim_utils
 from modules.muscle_actuator.muscle_actuator_cfg import MuscleActuatorCfg
-from modules.muscle_actuator.muscle_parameters import muscle_params
+from modules.muscle_actuator.muscle_actuator_parameters import muscle_params
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
-
-from isaaclab.actuators import ActuatorNetMLPCfg, DCMotorCfg, ImplicitActuatorCfg
 
 UNITREE_GO2_MUSCLE_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -48,15 +46,3 @@ UNITREE_GO2_MUSCLE_CFG = ArticulationCfg(
 )
 
 # ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint']
-
-# actuators={
-#         "base_legs": DCMotorCfg(
-#             joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-#             effort_limit=23.5,
-#             saturation_effort=23.5,
-#             velocity_limit=30.0,
-#             stiffness=25.0,
-#             damping=0.5,
-#             friction=0.0,
-#         ),
-#     },

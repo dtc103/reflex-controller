@@ -45,12 +45,19 @@ class CommandsCfg:
     position_command = ReachPositionCommandCfg(
         asset_name="robot",
         debug_vis=True,
-        resampling_time_range=(5.0, 5.0)
+        resampling_time_range=(5.0, 5.0),
+        body_names=body_parts,
+        goal_tolerance=0.05
     )
 
 @configclass
 class ActionsCfg:
-    muscle_activation = MuscleActionCfg(asset_name="robot", joint_names=[".*"])
+    muscle_activation = MuscleActionCfg(
+        asset_name="robot", 
+        joint_names=[".*"],
+        offset=0.5,
+        scale=0.5
+        )
 
 @configclass
 class ObservationsCfg:
@@ -110,14 +117,24 @@ class EventCfg:
 
 @configclass
 class RewardsCfg:
-    goal_position_reach = RewTerm(
-        func=reach_position_reward,
+    goal_position_reach_dense = RewTerm(
+        func=reach_position_reward_l2,
         params={
             "command_name": "position_command",
             "std": 0.3,
-            "body_parts": body_parts
+            "body_parts": body_parts,
         },
-        weight=1.0
+        weight=5.0
+    )
+
+    goal_position_reach_sparse = RewTerm(
+        func=reach_position_reward_goal_sparse,
+        params={
+            "command_name": "position_command",
+            "body_parts": body_parts,
+            "goal_tolerance": 0.05
+        }, 
+        weight=10.0
     )
 
     # action_reg = RewTerm(

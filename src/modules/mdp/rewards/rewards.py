@@ -11,32 +11,50 @@ from isaaclab.managers.manager_term_cfg import RewardTermCfg
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-def reach_position_reward(
+def reach_position_reward_l2(
     env: ManagerBasedRLEnv, 
     command_name: str, 
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     std: float = 0.1,
     body_parts: list[str] = ["FL_foot"],
-    goal_tolerance = 0.025
 ) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
 
-    foot_idxs, _ = asset.find_bodies(body_parts)
+    foot_idxs, _ = asset.find_bodies(body_parts, preserve_order=True)
     foot_positions = asset.data.body_pos_w[:, foot_idxs, :]
 
     goal_positions = env.command_manager.get_command(command_name).view(env.num_envs, len(foot_idxs), 3) # has shape (env, n_feet * 3) -> need to be adapted to (env, n_feet, 3)
     
-    # squared euclidian norm
+    # squared euclidian norm as distance
     distances = torch.sum((goal_positions - foot_positions) ** 2, dim=-1)
-
     total_error = distances.sum(dim=1)
 
-    # give an extra boost of the reward, if it reaches the goal
-    #reached_goal = torch.sum((distances < goal_tolerance).int()) / env.num_envs
-
-    reward = torch.exp(-total_error / (std ** 2))# + reached_goal
+    reward = torch.exp(-total_error / (std ** 2))
 
     return reward
+
+def reach_position_reward_goal_sparse(
+    env: ManagerBasedRLEnv, 
+    command_name: str, 
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    body_parts: list[str] = ["FL_foot"],
+    goal_tolerance = 0.025
+) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+
+    foot_idxs, _ = asset.find_bodies(body_parts, preserve_order=True)
+    foot_positions = asset.data.body_pos_w[:, foot_idxs, :]
+
+    goal_positions = env.command_manager.get_command(command_name).view(env.num_envs, len(foot_idxs), 3) # has shape (env, n_feet * 3) -> need to be adapted to (env, n_feet, 3)
+
+    distances = torch.sqrt(torch.sum((goal_positions - foot_positions) ** 2, dim=-1))
+
+    reached_goal = (distances < goal_tolerance).float()
+
+    reward = torch.sum(reached_goal, dim=-1)
+
+    return reward
+
 
 def action_regularization_reward(
     env: ManagerBasedRLEnv,

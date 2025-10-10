@@ -18,8 +18,8 @@ class FvmaxExperiment(BaseExperiment):
 
         step_size = 0.5
 
-        self.fvmax = torch.arange(1.0, 5.0 + step_size, step_size, device=self.muscle_parameters["device"])
-        self.vmax = torch.arange(3.0, 9.0 + step_size, step_size, device=self.muscle_parameters["device"])
+        self.fvmax = torch.arange(1.0, 9.0 + step_size, step_size, device=self.muscle_parameters["device"])
+        self.vmax = torch.arange(1.0, 9.0 + step_size, step_size, device=self.muscle_parameters["device"])
         
         self.joint_idxs, self.joint_names = self.robot.find_joints(["FL_hip_joint", "RL_hip_joint", "FL_thigh_joint", "RL_thigh_joint", "FL_calf_joint", "RL_calf_joint"])
 
@@ -44,18 +44,21 @@ class FvmaxExperiment(BaseExperiment):
 
         self.robot.reset()
 
-        self.run_sim_for_steps(300)
-
-    def run_sim_for_steps(self, steps):
-        for _ in range(steps):
-            self.robot.set_joint_position_target(self.activations[:, self.num_joints:])
-            self.robot.set_joint_velocity_target(self.activations[:, :self.num_joints])
+        self.run_sim_for_s(2)
+    
+    def run_sim_for_s(self, s):
+        for _ in range(int(s / self.sim_dt)):
+            self.robot.set_joint_position_target(self.activations[:, :self.num_joints]) #flexor input
+            self.robot.set_joint_velocity_target(self.activations[:, self.num_joints:]) # extensor input
             self.robot.write_data_to_sim()
 
             self.sim.step()
             self.scene.update(self.sim_dt)
 
     def run_experiment(self):
+        start_time = datetime.now().strftime('%Y-%m-%d-%H-%M')
+        logger = self.robot.actuators["base_legs"].muscle_model.logger
+
         for i, joint_name in tqdm(zip(self.joint_idxs, self.joint_names), desc="Joint Loop", position=0):
             #print("Joint Experiments:", joint_name, i)
             self.reset_robot()
@@ -65,20 +68,18 @@ class FvmaxExperiment(BaseExperiment):
                     self.robot.actuators["base_legs"].fvmax = fv.item()
                     self.robot.actuators["base_legs"].vmax = v.item()
 
-                    self.robot.actuators["base_legs"].start_logging()
+                    logger.start_logging()
 
-                    for _ in range(10):
+                    for _ in range(4):
                         self.activations[:, [i, i + self.num_joints]] = self.test_activations[self.mode]
 
-                        self.run_sim_for_steps(500)
+                        self.run_sim_for_s(1.5)
 
                         self.mode = 1 - self.mode
 
-
-                    #print("Saving results to", f"data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}_<curr_time>.pkl")
-                    self.robot.actuators['base_legs'].save_logs(f"/home/jan/dev/reflex-controller/data/vmax_fvmax_tuning/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}_{datetime.now().strftime('%Y-%m-%d-%H-%M')}.pkl")
-                    self.robot.actuators['base_legs'].stop_logging()
-                    self.robot.actuators['base_legs'].reset_logging()
+                    logger.save_logs(f"/home/jan/dev/reflex-controller/data/vmax_fvmax_tuning/{start_time}/{joint_name}_fvmax_{round(fv.item(), 2)}_vmax_{round(v.item(), 2)}.pkl")
+                    logger.pause_logging()
+                    logger.reset_logging()
 
                     self.reset_activations()
                     self.reset_robot()

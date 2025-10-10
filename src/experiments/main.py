@@ -13,7 +13,7 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-from modules.muscle_actuator.muscle_parameters import muscle_params
+from modules.muscle_actuator.muscle_actuator_parameters import muscle_params
 from experiments.muscles.activations import ActivationExperiments
 from experiments.muscles.vmax_fvmax_tuning import FvmaxExperiment
 
@@ -24,8 +24,6 @@ from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 
 from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
-
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 @configclass
 class UnitreeSceneCfg(InteractiveSceneCfg):
@@ -53,6 +51,8 @@ def main():
     sim_cfg.dt = muscle_params["dt"]
 
     sim_cfg.render_interval = 1
+
+    sim_cfg.enable_scene_query_support = True
     
     sim = SimulationContext(sim_cfg)
     # Set main camera
