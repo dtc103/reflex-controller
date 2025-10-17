@@ -21,7 +21,7 @@ import modules.mdp.observations as obs
 
 import isaaclab.envs.mdp as mdp
 
-body_parts = ["FL_foot"]
+body_part_directions = ["FR"]
 
 @configclass
 class UnitreeSceneCfg(InteractiveSceneCfg):
@@ -46,7 +46,7 @@ class CommandsCfg:
         asset_name="robot",
         debug_vis=True,
         resampling_time_range=(5.0, 5.0),
-        body_names=body_parts,
+        body_names=body_part_directions,
         goal_tolerance=0.05
     )
 
@@ -55,9 +55,9 @@ class ActionsCfg:
     muscle_activation = MuscleActionCfg(
         asset_name="robot", 
         joint_names=[".*"],
-        offset=0.5,
-        scale=0.5
-        )
+        scale=0.5,
+        offset=0.5
+    )
 
 @configclass
 class ObservationsCfg:
@@ -68,9 +68,9 @@ class ObservationsCfg:
         actions = ObsTerm(func=mdp.last_action)
         #Idk, if this observation improves it or not
         feet_pos = ObsTerm(
-            func=obs.body_pos,
+            func=obs.foot_pos,
             params={
-                "body_names": body_parts
+                "body_names": body_part_directions
             }
         )
         position_command = ObsTerm(
@@ -95,15 +95,15 @@ class EventCfg:
         }
     )
 
-    physics_material = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "mass_distribution_params": (0.0, 2.0),
-            "operation": "add"
-        }
-    )
+    # physics_material = EventTerm(
+    #     func=mdp.randomize_rigid_body_mass,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "mass_distribution_params": (0.0, 2.0),
+    #         "operation": "add"
+    #     }
+    # )
 
     # external_force_torque = EventTerm(
     #     func=mdp.apply_external_force_torque,
@@ -121,25 +121,40 @@ class RewardsCfg:
         func=reach_position_reward_l2,
         params={
             "command_name": "position_command",
-            "std": 0.3,
-            "body_parts": body_parts,
+            "std": 0.20,
+            "body_parts": body_part_directions,
         },
-        weight=5.0
+        weight=1e1
     )
 
     goal_position_reach_sparse = RewTerm(
         func=reach_position_reward_goal_sparse,
         params={
             "command_name": "position_command",
-            "body_parts": body_parts,
+            "body_parts": body_part_directions,
             "goal_tolerance": 0.05
         }, 
-        weight=10.0
+        weight=5e0
     )
 
     # action_reg = RewTerm(
     #     func=action_regularization_reward,
-    #     weight=0.05,
+    #     weight=5e-3,
+    # )
+
+    # action_reg_2 = RewTerm(
+    #     func=mdp.action_rate_l2,
+    #     weight=-1e-2
+    # )
+
+    # joint_acc_l2 = RewTerm(
+    #     func=mdp.joint_acc_l2,
+    #     weight=-2.5e-7
+    # )
+
+    # joint_limist = RewTerm(
+    #     func=mdp.joint_pos_limits,
+    #     weight=-1e-1
     # )
 
 @configclass
@@ -161,8 +176,8 @@ class ReachingMuscleGo2Cfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        self.decimation = 5
-        self.episode_length_s = 10
+        self.decimation = 4
+        self.episode_length_s = 20
         
         self.sim.dt = self.scene.robot.actuators["base_legs"].muscle_params["dt"]
         self.sim.render_interval = self.decimation

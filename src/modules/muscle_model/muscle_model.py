@@ -59,7 +59,7 @@ class MuscleModel:
     
     def _calc_l_min(self, Fmin, tol=10e-7):
         def f(l_ce):
-            return self._FL(torch.tensor([l_ce], device=self.device)) - Fmin
+            return (self._FL(torch.tensor([l_ce], device=self.device)) - Fmin).item()
         
         mid = 1.0
         return bisect(lambda x: f(x), self.lmin + 10e-9, mid - 10e-9, xtol=tol)

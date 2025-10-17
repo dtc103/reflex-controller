@@ -20,7 +20,9 @@ class ReachPositionCommand(CommandTerm):
 
     def __init__(self, cfg: ReachPositionCommandCfg, env: ManagerBasedRLEnv):
         self._robot: Articulation = env.scene[cfg.asset_name]
-        self._hip_body_ids, self._hip_body_names = self._robot.find_bodies(cfg.body_names, preserve_order=True) #order: (FL, FR, RL, RR)
+
+        hip_names = self._make_hip_string(cfg.body_names)
+        self._hip_body_ids, self._hip_body_names = self._robot.find_bodies(hip_names, preserve_order=True) #order: (FL, FR, RL, RR)
         self._num_hips = len(self._hip_body_ids)
 
         super().__init__(cfg, env)
@@ -29,8 +31,8 @@ class ReachPositionCommand(CommandTerm):
         self._reached = torch.zeros(self.num_envs, len(self._hip_body_ids), dtype=torch.bool, device=self.device)
 
         # defines, if the spheres are right or left of the body (-1 is right, 1 is left)
-        is_R_part_re = re.compile(r"^.R_.*")
-        self._directions = torch.tensor([-1 if is_R_part_re.match(body_name) else 1 for body_name in self._hip_body_names], device=self.device)
+        is_R_part_re = re.compile(r"^.R")
+        self._directions = torch.tensor([-1 if is_R_part_re.match(body_name) else 1 for body_name in cfg.body_names], device=self.device)
         
         #TODO implement still
         #self.metrics["goal_distance"] = torch.zeros(self.num_envs, device=self.device)
@@ -38,7 +40,10 @@ class ReachPositionCommand(CommandTerm):
     @property
     def command(self) -> torch.Tensor:
         return self._desired_pos_w
-    
+
+    def _make_hip_string(self, body_parts):
+        return [body_part + "_hip" for body_part in body_parts]
+
     def _resample_command(self, env_ids):
         """Generate random goal positions for the end-effektors to reach. Here the positions to reach are sampled from a half-sphere, which center is defined as the hip joint position. 
         From there the circles are spanning from the mid of the body outwards
@@ -50,16 +55,17 @@ class ReachPositionCommand(CommandTerm):
         hip_pos_w = self._robot.data.body_pos_w[env_ids][:, self._hip_body_ids, :]
         env_count = len(env_ids)
 
+        # sample a point in a cylinder
         r0, r1 = self.cfg.radius_range
+        h0, h1 = self.cfg.height_range
         u = torch.rand(env_count, self._num_hips, device=self.device)
-        radii = (u * (r1**3 - r0**3) + r0**3) ** (1.0/3.0)
+        radii = (u * (r1 - r0) + r0)
+        #we do not take the whole circle here, but only the lower part, so half of a circle
+        phi = torch.tensor(-torch.pi, device=self.device) # * torch.rand(env_count, self._num_hips, device=self.device)
 
-        theta = 2.0 * torch.pi * torch.rand(env_count, self._num_hips, device=self.device)
-        phi = 0.5 * torch.pi * torch.rand(env_count, self._num_hips, device=self.device)
-
-        xs = radii * torch.sin(phi) * torch.sin(theta)
-        ys = radii * torch.cos(phi) * self._directions
-        zs = radii * torch.sin(phi) * torch.cos(theta)
+        xs = radii * torch.cos(phi)
+        ys = (u * (h1 - h0) + h0) * self._directions
+        zs = radii * torch.sin(phi)
 
         offsets = torch.stack([xs, ys, zs], dim=2)
 

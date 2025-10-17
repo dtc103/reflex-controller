@@ -42,7 +42,8 @@ class MuscleAction(ActionTerm):
                 self._clip[:, index_list] = torch.tensor(value_list, device=self.device)
             else:
                 raise ValueError(f"Unsupported clip type: {type(cfg.clip)}. Supported types are dict.")
-            
+        
+
     @property
     def action_dim(self) -> int:
         return 2 * self._num_joints
@@ -57,9 +58,11 @@ class MuscleAction(ActionTerm):
     
     def process_actions(self, actions: torch.Tensor):
         self._raw_actions[:] = actions
-        self._processed_actions = self.raw_actions * self.cfg.scale + self.cfg.offset # self.cfg.scale will be 0.5 and self.cfg.offset also 0.5
+        self._processed_actions = (self.raw_actions * self.cfg.scale + self.cfg.offset).clamp(min=0.0, max=1.0) # self.cfg.scale will be 0.5 and self.cfg.offset also 0.5
+
         #print(self._processed_actions)
         self._processed_actions = self._processed_actions.clamp(min=0, max=1)
+
         # if self.cfg.clip is not None:
         #     self._processed_actions = torch.clamp(
         #         self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
@@ -69,6 +72,7 @@ class MuscleAction(ActionTerm):
         self._asset.set_joint_position_target(self.processed_actions[:, :self._num_joints])
         self._asset.set_joint_velocity_target(self.processed_actions[:, self._num_joints:])
 
+        
     def reset(self, env_ids: Sequence | None = None) -> None:
         if env_ids is None:
             self._raw_actions.zero_()

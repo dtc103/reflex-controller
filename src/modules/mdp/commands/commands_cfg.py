@@ -16,7 +16,8 @@ class ReachPositionCommandCfg(CommandTermCfg):
 
     asset_name: str = MISSING
 
-    radius_range: tuple[float, float] = (0.1, 0.4)
+    radius_range: tuple[float, float] = (0.2, 0.4)
+    height_range: tuple[float, float] = (0.05, 0.2)
     goal_tolerance :float= 0.025 # maximal euclidian distance from goal center to be considered reching the goal
 
     sphere_prim_path: str = "/Visuals/Command/goal_pos_{index}"

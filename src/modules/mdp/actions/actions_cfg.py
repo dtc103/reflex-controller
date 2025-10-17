@@ -3,6 +3,7 @@ from dataclasses import MISSING
 from isaaclab.managers.action_manager import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 from . import muscle_actions
+from . import camera_action
 
 @configclass
 class MuscleActionCfg(ActionTermCfg):
@@ -12,3 +13,7 @@ class MuscleActionCfg(ActionTermCfg):
     preserve_order: bool = True
 
     class_type: type[ActionTerm] = muscle_actions.MuscleAction
+
+@configclass
+class CameraActionCfg(ActionTermCfg):
+    class_type: type[ActionTerm] = camera_action.CameraAction
