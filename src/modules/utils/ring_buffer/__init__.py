@@ -1,1 +1,1 @@
-from .ring_buffer import FiFoRingBuffer
+from .ring_buffer import FiFoRingBufferSimple
