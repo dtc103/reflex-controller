@@ -31,7 +31,7 @@ class ReflexController:
         self.connection_matrix_F = torch.diag(torch.zeros(self.num_muscles), device=self.device)
         self.offsets = torch.zeros(self.num_muscles, device=self.device)
 
-        self._activation = 
+        
 
     def update_activation(self, joint_pos, joint_vel):
         pass
