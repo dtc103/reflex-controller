@@ -8,4 +8,4 @@ from .reflex_controller_actuator import ReflexControllerActuator
 class ReflexControllerActuatorCfg(ActuatorBaseCfg):
     class_type: type = ReflexControllerActuator
 
-    controller_params: dict = MISSING
+    reflex_params: dict = MISSING
