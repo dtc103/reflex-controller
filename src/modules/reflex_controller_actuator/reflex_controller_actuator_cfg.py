@@ -9,3 +9,4 @@ class ReflexControllerActuatorCfg(ActuatorBaseCfg):
     class_type: type = ReflexControllerActuator
 
     reflex_params: dict = MISSING
+    muscle_params: dict = MISSING

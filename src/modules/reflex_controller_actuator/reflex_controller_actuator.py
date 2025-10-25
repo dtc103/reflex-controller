@@ -17,23 +17,24 @@ class ReflexControllerActuator(ActuatorBase):
         super().__init__(cfg, *args, **kwargs)
         ReflexControllerActuator.is_implicit_model = False
 
+        self.muscle_params = cfg.muscle_params
         self.reflex_params = cfg.reflex_params
         self.reflex_controller = ReflexController(
             self._num_envs,
             self.num_joints,
-            None,
-            0.03, #30ms
-            self.reflex_params["lmin"],
-            self.reflex_params["lmax"],
-            self.reflex_params["fvmax"],
-            self.reflex_params["vmax"],
-            self.reflex_params["fpmax"],
-            self.reflex_params["fmin"],
-            self.reflex_params["lce_max"],
-            self.reflex_params["peak_force"],
-            self.reflex_params["dt"],
-            self.reflex_params["angles"],
-            self.reflex_params["device"]
+            self.reflex_params["connection_matrix"],
+            self.reflex_params["delay"], #30ms
+            self.muscle_params["lmin"],
+            self.muscle_params["lmax"],
+            self.muscle_params["fvmax"],
+            self.muscle_params["vmax"],
+            self.muscle_params["fpmax"],
+            self.muscle_params["fmin"],
+            self.muscle_params["lce_max"],
+            self.muscle_params["peak_force"],
+            self.muscle_params["dt"],
+            self.muscle_params["angles"],
+            self.muscle_params["device"]
         )
 
     def compute(self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor) -> ArticulationActions:
