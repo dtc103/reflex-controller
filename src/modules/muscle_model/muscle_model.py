@@ -5,8 +5,23 @@ from scipy.optimize import bisect
 from ..utils.logger.logger import Logger
 
 class MuscleModel:
-    def __init__(self, num_envs, num_joints, lmin, lmax, fvmax, vmax, fpmax, fmin, lce_max, peak_force, sim_dt, joint_angle_extrema, device="cuda:0"):
-        self.logger = Logger()
+    def __init__(
+        self, 
+        num_envs: int, 
+        num_joints: int, 
+        lmin: float, 
+        lmax: float, 
+        fvmax: float, 
+        vmax: float, 
+        fpmax: float, 
+        fmin: float, 
+        lce_max: float, 
+        peak_force: float, 
+        sim_dt: float, 
+        joint_angle_extrema: torch.Tensor, 
+        device: str
+    ):
+        #self.logger = Logger()
 
         self.num_envs = num_envs
         self.num_joints = num_joints
@@ -21,30 +36,34 @@ class MuscleModel:
         self.dt = sim_dt
         self.device = device
         
-        self.phi_min = torch.tensor(joint_angle_extrema, device=self.device, requires_grad=False)[:, 0]
-        self.phi_max = torch.tensor(joint_angle_extrema, device=self.device, requires_grad=False)[:, 1]
+        self.phi_min = joint_angle_extrema.detach().clone().requires_grad_(False)[:, 0]
+        self.phi_max = joint_angle_extrema.detach().clone().requires_grad_(False)[:, 1]
 
         self.activation_tensor = torch.zeros(
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False
         )
 
         self.lce_dot_tensor = torch.zeros(
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
         self.force_tensor = torch.zeros(
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
+        self.lce_tensor = torch.zeros(
+            (self.num_envs, self.num_joints * 2),
+            dtype=torch.float32,
+            device=self.device,
+        )
+
+        self.lce_min = self._calc_l_min(self.fmin, 10e-7, 128)
         self.moment, self.lce_ref = self._compute_parametrization()
 
     def _FL(self, lce: torch.Tensor) -> torch.Tensor:
@@ -52,17 +71,25 @@ class MuscleModel:
         Force length
         """
         length = lce
-        b1 = self._bump(length, self.lmin, 1, self.lmax)
+        b1 = self._bump(length, self.lmin, 1.0, self.lmax)
         b2 = self._bump(length, self.lmin, 0.5 * (self.lmin + 0.95), 0.95)
         bump_res = b1 + 0.15 * b2
         return bump_res
-    
-    def _calc_l_min(self, Fmin, tol=10e-7):
-        def f(l_ce):
-            return (self._FL(torch.tensor([l_ce], device=self.device)) - Fmin).item()
-        
-        mid = 1.0
-        return bisect(lambda x: f(x), self.lmin + 10e-9, mid - 10e-9, xtol=tol)
+
+    def _calc_l_min(self, target_force: float, tol: float = 10e-7, max_iter: int = 128) -> float:
+        lower = self.lmin + 1.0e-8
+        upper = 1.0 - 1.0e-8
+        for _ in range(max_iter):
+            mid = 0.5 * (lower + upper)
+            fl_mid = float(self._FL(torch.tensor([mid], device=self.device))[0].item())
+            diff = fl_mid - target_force
+            if diff > 0.0:
+                upper = mid
+            else:
+                lower = mid
+            if abs(diff) < tol:
+                break
+        return 0.5 * (lower + upper)
 
     def _bump(self, length: torch.Tensor, A: float, mid: float, B: float) -> torch.Tensor:
         """
@@ -83,7 +110,6 @@ class MuscleModel:
             length,
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
         x = (B - length) / (B - right)
@@ -120,7 +146,6 @@ class MuscleModel:
             eff_vel,
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
         c_result = torch.where(
@@ -161,7 +186,7 @@ class MuscleModel:
         cond_3 = (cond_3_tmp * 3 + 1) * (0.25 * self.fpmax)
         
         ##### copy based on condition the correct output into new tensor
-        c_result = torch.zeros_like(lce, dtype=torch.float32, device=self.device, requires_grad=False)
+        c_result = torch.zeros_like(lce, dtype=torch.float32, device=self.device)
         c_result = torch.where(lce <= b, cond_2, c_result)
         c_result = torch.where(
             lce <= 1,
@@ -179,8 +204,6 @@ class MuscleModel:
 
         We compute them as one long vector now.
         """
-
-        self.lce_min = self._calc_l_min(self.fmin)
 
         moment = torch.zeros((self.num_envs, self.num_joints * 2), device=self.device)
         moment[:, int(moment.shape[1] // 2):] = (self.lce_max - self.lce_min) / (self.phi_max - self.phi_min)
@@ -242,17 +265,17 @@ class MuscleModel:
 
         moment = torch.sum(
             torch.reshape(torque, (self.num_envs, 2, self.num_joints)),
-            axis=-2,
+            dim=-2,
         )
 
-        if self.logger.is_logging:
-            self.logger.log("FL", FL.detach().cpu().numpy())
-            self.logger.log("FV", FP.detach().cpu().numpy())
-            self.logger.log("lce_tensor", self.lce_tensor.detach().cpu().numpy())
-            self.logger.log("lce_dot_tensor", self.lce_dot_tensor.detach().cpu().numpy())
-            self.logger.log("normalized_muscle_force", self.force_tensor.detach().cpu().numpy())
-            self.logger.log("individual_muscle_torque", torque.detach().cpu().numpy())
-            self.logger.log("joint_torque", moment.detach().cpu().numpy())
+        # if self.logger.is_logging:
+        #     self.logger.log("FL", FL.detach().cpu().numpy())
+        #     self.logger.log("FV", FP.detach().cpu().numpy())
+        #     self.logger.log("lce_tensor", self.lce_tensor.detach().cpu().numpy())
+        #     self.logger.log("lce_dot_tensor", self.lce_dot_tensor.detach().cpu().numpy())
+        #     self.logger.log("normalized_muscle_force", self.force_tensor.detach().cpu().numpy())
+        #     self.logger.log("individual_muscle_torque", torque.detach().cpu().numpy())
+        #     self.logger.log("joint_torque", moment.detach().cpu().numpy())
 
         return moment
     
@@ -264,11 +287,11 @@ class MuscleModel:
             self._compute_virtual_lengths(joint_pos)
             moment = self._compute_moment(joint_vel)
 
-            if self.logger.is_logging:
-                self.logger.log("joint_position", joint_pos.detach().cpu().numpy())
-                self.logger.log("joint_velocity", joint_vel.detach().cpu().numpy())
-                self.logger.log("clipped_activations", muscle_activations.detach().cpu().numpy())
-                self.logger.log("raw_activations", clipped_muscle_activations.detach().cpu().numpy())
+            # if self.logger.is_logging:
+            #     self.logger.log("joint_position", joint_pos.detach().cpu().numpy())
+            #     self.logger.log("joint_velocity", joint_vel.detach().cpu().numpy())
+            #     self.logger.log("clipped_activations", muscle_activations.detach().cpu().numpy())
+            #     self.logger.log("raw_activations", clipped_muscle_activations.detach().cpu().numpy())
 
             return moment
         
@@ -277,22 +300,18 @@ class MuscleModel:
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False
         )
 
         self.lce_dot_tensor = torch.zeros(
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
         self.force_tensor = torch.zeros(
             (self.num_envs, self.num_joints * 2),
             dtype=torch.float32,
             device=self.device,
-            requires_grad=False,
         )
 
         self.moment, self.lce_ref = self._compute_parametrization()
-        

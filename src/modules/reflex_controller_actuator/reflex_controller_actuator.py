@@ -17,12 +17,19 @@ class ReflexControllerActuator(ActuatorBase):
         super().__init__(cfg, *args, **kwargs)
         ReflexControllerActuator.is_implicit_model = False
 
+        if self.joint_indices != slice(None):
+            joint_indices = self.joint_indices.detach().clone()
+            muscle_indices = torch.cat([joint_indices, joint_indices + 12]) # 12 is the number of joints that are on the articulation in total
+        else:
+            joint_indices = torch.arange(self.num_joints, device=self._device)
+            muscle_indices = torch.cat([joint_indices, joint_indices + 12])
+
         self.muscle_params = cfg.muscle_params
         self.reflex_params = cfg.reflex_params
         self.reflex_controller = ReflexController(
             self._num_envs,
             self.num_joints,
-            self.reflex_params["connection_matrix"],
+            torch.tensor(self.reflex_params["connection_matrix"], device=self._device)[muscle_indices][:, muscle_indices],
             self.reflex_params["delay"], #30ms
             self.muscle_params["lmin"],
             self.muscle_params["lmax"],
@@ -33,7 +40,7 @@ class ReflexControllerActuator(ActuatorBase):
             self.muscle_params["lce_max"],
             self.muscle_params["peak_force"],
             self.muscle_params["dt"],
-            self.muscle_params["angles"],
+            torch.tensor(self.muscle_params["angles"], device=self._device)[joint_indices],
             self.muscle_params["device"]
         )
 

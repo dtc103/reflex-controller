@@ -33,7 +33,7 @@ from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 ##
 # Pre-defined configs
 ##
-from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_8D_CFG, UNITREE_GO2_REFLEX_8D_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
@@ -62,7 +62,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_REFLEX_8D_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -72,26 +72,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     # Extract scene entities
     # note: we only do this here for readability.
     robot:Articulation = scene["unitree"]
-    # marker = VisualizationMarkers(
-    #     VisualizationMarkersCfg(
-    #         prim_path="/Visuals/markers",
-    #         markers={
-    #             "sphere":sim_utils.SphereCfg(
-    #                 radius=0.05,
-    #                 visual_material=sim_utils.PreviewSurfaceCfg(
-    #                     diffuse_color=(1.0, 0.0, 0.0)
-    #                 )
-    #             ),
-    #             "arrow":sim_utils.UsdFileCfg(
-    #                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-    #                 scale=(1.0, 0.5, 0.5),
-    #                 visual_material=sim_utils.PreviewSurfaceCfg(
-    #                     diffuse_color=(1.0, 0.0, 0.0)
-    #                 )
-    #             )
-    #         }
-    #     )
-    # )
+
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     print(sim_dt)
@@ -128,12 +109,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # clear internal buffers
             #robot.reset()
 
-        action[:, :] = 0.6
-        action[:, [8, 9]] = 0.3
-        action[:, [10, 11]] = 0.3
-        action[:, [20, 21]] = 0.7
-        action[:, [4, 5]] = 0.8
-        action[:, [6, 7]] = 1.0
+        action[:, :] = 0.5
+        action[:, :4] = 0.0
+
+
         robot.set_joint_position_target(action[:, :12])
         robot.set_joint_velocity_target(action[:, 12:])
 

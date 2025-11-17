@@ -68,11 +68,11 @@ def main():
     print("[INFO]: Setup complete...")
     # Run the simulator
     
-    activation_experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
-    activation_experiment.run_experiment()
+    #activation_experiment = ActivationExperiments(simulation_app, sim, scene, muscle_params)
+    #activation_experiment.run_experiment()
 
-    #fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
-    #fv_v_optim_experiment.run_experiment()
+    fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
+    fv_v_optim_experiment.run_experiment()
     
 
 if __name__ == "__main__":

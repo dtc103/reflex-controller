@@ -16,4 +16,28 @@ def foot_pos(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("r
 def base_pose(env:ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
 
-    return torch.flatten(asset.data.root_pose_w, start_dim=1)
+    return asset.data.root_pose_w
+
+def muscle_length(env:ManagerBasedEnv, asset_cfg = SceneEntityCfg("robot")):
+    robot: Articulation = env.scene[asset_cfg.name]
+
+    if not hasattr(robot.actuators["base_legs"].muscle_model, "lce_tensor"):
+        return torch.zeros(env.num_envs, 24, device=env.device)
+    
+    return robot.actuators["base_legs"].muscle_model.lce_tensor
+    
+def muscle_vel(env:ManagerBasedEnv, asset_cfg = SceneEntityCfg("robot")):
+    robot: Articulation = env.scene[asset_cfg.name]
+
+    if not hasattr(robot.actuators["base_legs"].muscle_model, "lce_dot_tensor"):
+        return torch.zeros(env.num_envs, 24, device=env.device)
+
+    return robot.actuators["base_legs"].muscle_model.lce_dot_tensor
+
+def muscle_force(env:ManagerBasedEnv, asset_cfg = SceneEntityCfg("robot")):
+    robot: Articulation = env.scene[asset_cfg.name]
+
+    if not hasattr(robot.actuators["base_legs"].muscle_model, "force_tensor"):
+        return torch.zeros(env.num_envs, 24, device=env.device)
+
+    return robot.actuators["base_legs"].muscle_model.force_tensor

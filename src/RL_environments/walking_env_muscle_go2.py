@@ -55,11 +55,13 @@ class ActionsCfg:
 class ObservationsCfg:
     @configclass
     class PolicyCfg(ObsGroup):
-        joint_position = ObsTerm(func=mdp.joint_pos, noise=Unoise(n_min=-0.2, n_max=0.2))
-        joint_velocity = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-1.0, n_max=1.0))
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
-        actions = ObsTerm(func=mdp.last_action)
+        # TODO try to use muscle length and muscle velocity as input
+        muscle_length = ObsTerm(func=obs.muscle_length, noise=Unoise(n_min=-0.01, n_max=0.01))
+        muscle_vel = ObsTerm(func=obs.muscle_vel, noise=Unoise(n_min=-0.01, n_max=0.01))
+        #joint_velocity = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-0.3, n_max=0.3))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         base_pose = ObsTerm(func=obs.base_pose)
+        actions = ObsTerm(func=mdp.last_action)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -74,7 +76,7 @@ class EventCfg:
         mode="reset",
         params={
             "position_range": (-1.0, 1.0),
-            "velocity_range": (-5.0, 5.0)
+            "velocity_range": (-2.0, 2.0)
         }
     )
 
@@ -130,16 +132,9 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "force_range": (0.0, 50.0),
+            "force_range": (0.0, 20.0),
             "torque_range": (-0.0, 0.0),
         },
-    )
-
-    push_robot = EventTerm(
-        func=mdp.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(10.0, 15.0),
-        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
 
@@ -148,25 +143,17 @@ class RewardsCfg:
     linear_velocity_x = RewTerm(
         func=lin_vel_x,
         params={
-            "target_vel": 2.0,
-            "std":0.8
+            "target_vel": 1.5,
+            "std":0.75
         },
-        weight=10.0
+        weight=8.0
     ) 
 
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
+    #flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
 
-    alive = RewTerm(
-        func=mdp.is_alive,
-        weight=1.0
-    )
-
-    # termination = RewTerm(
-    #     func=mdp.is_terminated_term,
-    #     params={
-    #         "term_keys": "root_height_termination"
-    #     },
-    #     weight=-1.5
+    # alive = RewTerm(
+    #     func=mdp.is_alive,
+    #     weight=1.5
     # )
  
     action_reg = RewTerm(
@@ -174,12 +161,12 @@ class RewardsCfg:
         weight=0.05,
     )
 
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.3)
 
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-1.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["base", ".*thigh", ".*calf"]), "threshold": 1.0},
+        weight=-50.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*thigh"]), "threshold": 1.0},
     )
 
 
@@ -193,17 +180,17 @@ class TerminationsCfg:
     illegal_contacts = TerminationTermCfg(
         func = mdp.illegal_contact,
         params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=['base', 'FL_calf', 'FR_calf', 'RL_calf', 'RR_calf']),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=['base']),
             "threshold": 1.0
         }
     )
 
-    base_height = TerminationTermCfg(
-        func=mdp.terminations.root_height_below_minimum,
-        params={
-            "minimum_height" : 0.2
-        }
-    )
+    # base_height = TerminationTermCfg(
+    #     func=mdp.terminations.root_height_below_minimum,
+    #     params={
+    #         "minimum_height" : 0.2
+    #     }
+    # )
 
 
 @configclass
@@ -217,7 +204,7 @@ class WalkingMuscleGo2Cfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        self.decimation = 4
+        self.decimation = 5
         self.episode_length_s = 10
 
         
@@ -227,15 +214,16 @@ class WalkingMuscleGo2Cfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
 
         self.scene.robot.spawn.articulation_props.fix_root_link = False
+        self.scene.robot.spawn.articulation_props.enabled_self_collisions = True
 
-        self.scene.robot.init_state.pos = (0.0, 0.0, 0.5)
-        self.scene.robot.init_state.joint_pos = {
-            ".*L_hip_joint": 0.1,
-            ".*R_hip_joint": -0.1,
-            "F[L,R]_thigh_joint": 0.8,
-            "R[L,R]_thigh_joint": 1.0,
-            ".*_calf_joint": -1.5,
-        }
+        self.scene.robot.init_state.pos = (0.0, 0.0, 0.4)
+        # self.scene.robot.init_state.joint_pos = {
+        #     ".*L_hip_joint": 0.1,
+        #     ".*R_hip_joint": -0.1,
+        #     "F[L,R]_thigh_joint": 0.8,
+        #     "R[L,R]_thigh_joint": 1.0,
+        #     ".*_calf_joint": -1.5,
+        # }
 
 """
         self.scene.robot.init_state.pos = (0.0, 0.0, 0.4)

@@ -18,7 +18,7 @@ class MuscleActuator(ActuatorBase):
         MuscleActuator.is_implicit_model = False
 
         self.muscle_params = cfg.muscle_params
-        self.muscle_model = MuscleModel(
+        self.muscle_model = torch.jit.script(MuscleModel(
             self._num_envs, 
             self.num_joints, 
             self.muscle_params['lmin'],
@@ -30,15 +30,14 @@ class MuscleActuator(ActuatorBase):
             self.muscle_params['lce_max'],
             self.muscle_params['peak_force'],
             self.muscle_params['dt'],
-            self.muscle_params['angles'],
+            torch.tensor(self.muscle_params['angles'], device=self._device)[self.joint_indices],
             self.muscle_params['device'],
-        )
+        ))
 
     def compute(self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor) -> ArticulationActions:
         """
         actuator_pos: Current position of actuator
         """
-
         # since isaac lab does not allow the definition of own input items, we just 
         # act like the inputted control_action.joint_positions contain the muscle activations for one muscle of each joint
         # and control_action.joint_velocities the activations of the other muscles of the joint

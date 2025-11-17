@@ -59,14 +59,14 @@ class FvmaxExperiment(BaseExperiment):
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M')
         logger = self.robot.actuators["base_legs"].muscle_model.logger
 
-        for i, joint_name in tqdm(zip(self.joint_idxs, self.joint_names), desc="Joint Loop", position=0):
+        for i, joint_name in tqdm(list(zip(self.joint_idxs, self.joint_names)), desc="Joint Loop", position=0):
             #print("Joint Experiments:", joint_name, i)
             self.reset_robot()
 
             for fv in tqdm(self.fvmax, desc="Fvmax loop", position=1, leave=False):
                 for v in tqdm(self.vmax, desc="Vmax loop", position=2, leave=False):
-                    self.robot.actuators["base_legs"].fvmax = fv.item()
-                    self.robot.actuators["base_legs"].vmax = v.item()
+                    self.robot.actuators["base_legs"].muscle_model.fvmax = fv.item()
+                    self.robot.actuators["base_legs"].muscle_model.vmax = v.item()
 
                     logger.start_logging()
 

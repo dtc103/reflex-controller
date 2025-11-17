@@ -33,6 +33,17 @@ gym.register(
 )
 
 gym.register(
+    id="Muscle-Walk-Unitree-Go2-Direct-v0",
+    entry_point=f"{__name__}.walking_env_muscle_go2_direct:WalkingMuscleGo2Direct",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.walking_env_muscle_go2_direct:WalkingMuscleGo2DirectCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:WalkingUnitreeGo2MuscleDirectPPORunnerCfg",
+    }
+)
+
+
+gym.register(
     id="Muscle-Hop-Unitree-Go2-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
@@ -41,3 +52,4 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:HoppingUnitreeGo2MusclePPORunnerCfg",
     }
 )
+

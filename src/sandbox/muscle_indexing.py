@@ -31,7 +31,7 @@ import numpy as np
 ##
 # Pre-defined configs
 ##
-from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
+from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_8D_CFG, UNITREE_GO2_MUSCLE_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
@@ -60,7 +60,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_8D_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 

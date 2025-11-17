@@ -5,7 +5,7 @@ from ..muscle_model import MuscleModel
 from ..utils.ring_buffer import FiFoRingBufferSimple
 
 class ReflexController:
-    def __init__(self, num_envs, num_joints, connections, muscle_delay_s, lmin, lmax, fvmax, vmax, fpmax, fmin, lce_max, peak_force, sim_dt, joint_angle_extrema, device="cuda:0"):
+    def __init__(self, num_envs, num_joints, connections: torch.Tensor, muscle_delay_s, lmin, lmax, fvmax, vmax, fpmax, fmin, lce_max, peak_force, sim_dt, joint_angle_extrema, device="cuda:0"):
         """
         input of delays for each 
         Args:
@@ -14,12 +14,13 @@ class ReflexController:
             muscle_delay: 
                 muscle delay in s
         """
+
         self.device = device
         self.dt = sim_dt
         self.num_envs = num_envs
         self.num_joints = num_joints
         self.num_muscles = 2 * num_joints
-        self._connections = torch.tensor(connections, dtype=torch.bool, device=self.device)
+        self._connections = connections.detach().clone()
         self._num_matrix_parameters = torch.sum(self._connections.triu().int()).item()
         self._num_parameters = 2 * self._num_matrix_parameters + self.num_muscles
 
