@@ -21,7 +21,7 @@ class EventCfg:
         mode="reset",
         params={
             "position_range": (-1.0, 1.0),
-            "velocity_range": (-2.0, 2.0)
+            "velocity_range": (-1.0, 1.0)
         }
     )
 
@@ -31,53 +31,53 @@ class EventCfg:
         params={
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z":(-0.1, 0.2), "yaw": (0.0, 0.0)},
             "velocity_range": {
-                "x": (-0.1, 0.1),
-                "y": (-0.1, 0.1),
-                "z": (-0.1, 0.1),
-                "roll": (-0.1, 0.1),
-                "pitch": (-0.1, 0.1),
-                "yaw": (-0.1, 0.1),
+                "x": (-0.5, 0.5),
+                "y": (-0.1, 0.5),
+                "z": (-0.5, 0.5),
+                "roll": (-0.5, 0.5),
+                "pitch": (-0.5, 0.5),
+                "yaw": (-0.5, 0.5),
             },
         },
     )
 
-    body_perturbations = EventTermCfg(
-        func=mdp.randomize_rigid_body_mass,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-1.0, 3.0),
-            "operation": "add"
-        },
-        mode="startup"
-    )
+    # body_perturbations = EventTermCfg(
+    #     func=mdp.randomize_rigid_body_mass,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+    #         "mass_distribution_params": (-5.0, 5.0),
+    #         "operation": "add"
+    #     },
+    #     mode="startup"
+    # )
 
-    physics_material = EventTermCfg(
-        func=mdp.randomize_rigid_body_material,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.4, 0.8),
-            "dynamic_friction_range": (0.3, 0.6),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
-        },
-    )
+    # physics_material = EventTermCfg(
+    #     func=mdp.randomize_rigid_body_material,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+    #         "static_friction_range": (0.7, 0.8),
+    #         "dynamic_friction_range": (0.5, 0.6),
+    #         "restitution_range": (0.0, 0.0),
+    #         "num_buckets": 64,
+    #     },
+    # )
 
-    base_com = EventTermCfg(
-        func=mdp.randomize_rigid_body_com,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
-        },
-    )
+    # base_com = EventTermCfg(
+    #     func=mdp.randomize_rigid_body_com,
+    #     mode="startup",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+    #         "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+    #     },
+    # )
 
     base_external_force_torque = EventTermCfg(
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "force_range": (0.0, 10.0),
+            "force_range": (0.0, 50.0),
             "torque_range": (-0.0, 0.0),
         },
     )
@@ -94,13 +94,15 @@ class WalkingMuscleGo2DirectCfg(DirectRLEnvCfg):
     decimation = 4
     episode_length_s = 20
     action_space = 24
-    observation_space = 79 #58, when using joint_pos and joint_vel
+    observation_space = 94 #58, when using joint_pos and joint_vel
     state_space = 0
 
     action_scale = 0.5
     action_offset = 0.5
 
-    sim: SimulationCfg = SimulationCfg(dt=1/500, render_interval=decimation)
+    sim_dt = 1/500
+
+    sim: SimulationCfg = SimulationCfg(dt=sim_dt, render_interval=decimation)
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=2.0, replicate_physics=True)
     events: EventCfg = EventCfg()
 
@@ -109,3 +111,5 @@ class WalkingMuscleGo2DirectCfg(DirectRLEnvCfg):
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/.*", history_length=3, track_air_time=True
     )
+
+    camera_follow = True

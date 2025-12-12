@@ -26,7 +26,6 @@ from isaaclab.utils import configclass
 from isaaclab.utils.math import axis_angle_from_quat
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 ##
 # Pre-defined configs
@@ -60,7 +59,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_8D_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -80,14 +79,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     count = 0
     idx = 0
+
+    std_activation = 0.1
     
-    action = torch.tensor([[0.9] * 24], device=muscle_params["device"])
+    action = torch.tensor([[std_activation] * 24], device=muscle_params["device"])
 
     while simulation_app.is_running():
-        if count > 0.1 * (1 / sim_dt):
+        if count > 0.5 * (1 / sim_dt):
             count = 0
 
-            action[:, :] = 0.9
+            action[:, :] = std_activation
             action[:, idx] = 1.0
 
             idx = (idx + 1) % (2 * robot.num_joints)

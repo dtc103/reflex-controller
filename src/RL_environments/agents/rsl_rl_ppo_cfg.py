@@ -16,28 +16,63 @@ class UnitreeGo2MusclePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "unitree_go2_muscle_reach"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.5, #we change this, because we changed the PPO to be sqaushed between -1 and 1
-        actor_obs_normalization=True,
-        critic_obs_normalization=True,
-        noise_std_type = "log",
-        actor_hidden_dims=[1024, 512, 256],
-        critic_hidden_dims=[1024, 512, 256],
+        init_noise_std=1.0,
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
+        actor_hidden_dims=[512, 256, 128],
+        critic_hidden_dims=[512, 256, 128],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01, # a bit more exploration, because of changed actor critic
+        entropy_coef=0.01,
         num_learning_epochs=5,
-        num_mini_batches=8,
+        num_mini_batches=4,
         learning_rate=1.0e-3,
         schedule="adaptive",
-        gamma=0.995,
+        gamma=0.99,
         lam=0.95,
-        desired_kl=0.01, # keep a bit lower, since we changed actor critic
+        desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+# ophysics freq = 500Hz
+# agent frequency = 125Hz
+# render step = 4
+@configclass
+class WalkingUnitreeGo2MuscleDirectPPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.num_steps_per_env = 75
+
+        self.clip_actions = 1.0
+        
+        self.policy.actor_hidden_dims = [512, 256, 128]
+        self.policy.critic_hidden_dims = [512, 256, 128]
+
+
+        self.experiment_name = "unitree_go2_muscle_walking_direct"
+
+        self.policy.actor_obs_normalization = True
+        self.policy.critic_obs_normalization = True
+
+        #self.policy.noise_std_type = 'log'
+        self.policy.init_noise_std = 0.7
+
+        self.algorithm.num_mini_batches = 6
+        self.algorithm.num_learning_epochs = 4
+
+        self.algorithm.learning_rate = 1.0e-3
+        self.algorithm.gamma = 0.991
+        self.algorithm.entropy_coef = 0.008
+        self.algorithm.clip_param = 0.2
+        self.algorithm.lam = 0.95
+        self.algorithm.desired_kl = 0.01
+        self.algorithm.max_grad_norm = 1.0
+
 
 @configclass
 class HoppingUnitreeGo2MusclePPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
@@ -65,35 +100,20 @@ class WalkingUnitreeGo2MusclePPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
         
         self.policy.init_noise_std = 1.0
         self.algorithm.num_learning_epochs = 6
-
-@configclass
-class WalkingUnitreeGo2MuscleDirectPPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
-    def __post_init__(self):
-        super().__post_init__()
-
-        self.num_steps_per_env = 64
-        
-        self.policy.actor_hidden_dims = [512, 256, 128]
-        self.policy.critic_hidden_dims = [512, 256, 128]
-
-        self.experiment_name = "unitree_go2_muscle_walking_direct"
-
-        self.policy.actor_obs_normalization = True
-        self.policy.critic_obs_normalization = True
-        
-        self.algorithm.num_mini_batches = 12
-        self.algorithm.learning_rate = 5e-4
-        #self.algorithm.normalize_advantage_per_mini_batch = True
-        self.algorithm.gamma = 0.993
-        self.algorithm.desired_kl = 0.008
-        self.algorithm.entropy_coef = 0.015
-        self.algorithm.clip_param = 0.18
-        self.algorithm.schedule = "fixed"
-        
-        self.policy.init_noise_std = 0.6
-        self.algorithm.num_learning_epochs = 5
-
-    
+'''
+Best Hyperparameters:
+  learning_rate: 1.4519545357271965e-05
+  n_steps: 80
+  batch_size: 14
+  gamma: 0.996
+  gae_lambda: 0.9200000000000002
+  clip_param: 0.1897956278506332
+  ent_coef: 0.007
+  desired_kl: 0.009000000000000001
+  max_grad_norm: 0.9000000000000001
+  init_noise: 0.4341612839088024
+  num_learning_epochs: 4
+'''
 
 """
 original values

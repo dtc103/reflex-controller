@@ -74,6 +74,7 @@ def main():
     fv_v_optim_experiment = FvmaxExperiment(simulation_app, sim, scene, muscle_params)
     fv_v_optim_experiment.run_experiment()
     
+    
 
 if __name__ == "__main__":
     # run the main function

@@ -9,11 +9,8 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.sim.spawners.from_files import spawn_ground_plane, GroundPlaneCfg
 
-from typing import List
-
 from .walking_env_muscle_go2_direct_cfg import WalkingMuscleGo2DirectCfg
 
-import math
 
 class WalkingMuscleGo2Direct(DirectRLEnv):
     cfg: WalkingMuscleGo2DirectCfg
@@ -21,25 +18,27 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
     def __init__(self, cfg: WalkingMuscleGo2DirectCfg, render_mode: str | None = None, **kwags):
         super().__init__(cfg, render_mode, **kwags)
 
+        #for direct control
         self._actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device)
         self._previous_actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), device = self.device)
+
+        # self._actions = torch.zeros(self.num_envs, 2 * gym.spaces.flatdim(self.single_action_space), device=self.device)
+        # self._previous_actions = torch.zeros(self.num_envs, 2 * gym.spaces.flatdim(self.single_action_space), device = self.device)
 
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device) for key in [
                 "forward_gauss",
-                "forward_linear",
-                "lateral_penalty",
+                "action_regularization_1",
+                "action_regularization_2",
                 "angular_penalty",
-                "action_regularization",
-                "survival_bonus",
-                "total_clipped"
             ]
         }
 
+        self.total_mean_timesteps = 0
+
         self._base_id = torch.tensor(self._contact_sensor.find_bodies("base")[0], device=self.device)
-        print(self._base_id.shape)
         self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
-        self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies([".*thigh"])
+        self._undesired_contact_body_ids, _ = self._contact_sensor.find_bodies(["base", ".*thigh"])
         self._undesired_contact_body_ids = torch.tensor(self._undesired_contact_body_ids, device=self.device)
 
     def _setup_scene(self):
@@ -56,12 +55,16 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions):
-        # root_pos = self._robot.data.root_pos_w[0].cpu().numpy().tolist()
+        if self.cfg.camera_follow:
+            root_pos = self._robot.data.root_pos_w[0].cpu().numpy().tolist()
 
-        # cam_x = root_pos[0] + 3.0 * torch.cos(torch.tensor(-torch.pi / 2)).item()
-        # cam_y = root_pos[1] + 3.0 * torch.sin(torch.tensor(-torch.pi / 2)).item()
-        # cam_z = root_pos[2] + 1.0
-        # self.scene.sim.set_camera_view(eye=[cam_x, cam_y, cam_z], target=[root_pos[0], root_pos[1], 0.5])
+            cam_x = root_pos[0] + 3.0 * torch.cos(torch.tensor(-self.total_mean_timesteps / 100)).item()
+            cam_y = root_pos[1] + 3.0 * torch.sin(torch.tensor(-self.total_mean_timesteps / 100)).item()
+            cam_z = root_pos[2] + 1.0
+            self.scene.sim.set_camera_view(eye=[cam_x, cam_y, cam_z], target=[root_pos[0], root_pos[1], 0.5])
+
+        self.total_mean_timesteps += 1
+
         self._actions = actions.clone()
         self._processed_actions = (self.cfg.action_scale * self._actions + self.cfg.action_offset).clamp(min=0.0, max=1.0)
 
@@ -71,24 +74,16 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
 
     def _get_observations(self):
         self._previous_actions = self._actions.clone()
-
-        # obs = torch.cat(
-        #     [
-        #         self._robot.data.joint_pos,
-        #         self._robot.data.joint_vel,
-        #         self._robot.data.root_lin_vel_b,
-        #         self._robot.data.root_pose_w,
-        #         self._actions
-        #     ],
-        #     dim=-1
-        # )
+        
         obs = torch.cat(
             [
                 self._robot.actuators["base_legs"].muscle_model.lce_tensor, #muscle length
                 self._robot.actuators["base_legs"].muscle_model.lce_dot_tensor, #muscle velocity
                 self._robot.data.root_lin_vel_b,
-                self._robot.data.root_link_quat_w,
-                self._actions
+                self._robot.data.projected_gravity_b,
+                self._robot.data.root_quat_w,
+                self._actions,
+                self._contact_sensor.data.net_forces_w[:, self._feet_ids, :].view(self.num_envs, -1)
             ],
             dim=-1
         )
@@ -100,7 +95,10 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         tot_rew, rew_dic = compute_rewards(
             self._robot.data.root_lin_vel_b,
             self._robot.data.root_ang_vel_b,
+            self._robot.data.root_pos_w,
+            self.scene.env_origins,
             self._actions,
+            self._previous_actions,
             self.step_dt,
             self.num_envs,
             self.device
@@ -116,7 +114,7 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
             self.episode_length_buf,
             self.max_episode_length,
             self._contact_sensor.data.net_forces_w_history,
-            int(self._base_id.item()), 
+            self._undesired_contact_body_ids,
             self._robot.data.root_pos_w
         )
 
@@ -152,65 +150,54 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         extras = dict()
         extras["Episode_Termination/base_contact or root_height"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
+        extras["Total Timesteps"] = self.total_mean_timesteps
         self.extras["log"].update(extras)
 
 @torch.jit.script
 def compute_rewards(
     root_lin_vel_b: torch.Tensor,
     root_ang_vel_b: torch.Tensor,
-    action: torch.Tensor,
+    root_pos: torch.Tensor,
+    env_origins: torch.Tensor,
+    actions: torch.Tensor,
+    prev_actions: torch.Tensor,
     step_dt: float,
     num_envs: int,
     device: str,  
 ):
     v_x = root_lin_vel_b[:, 0]  # forward speed
-    v_y = root_lin_vel_b[:, 1]  # lateral speed
     ang_z = root_ang_vel_b[:, 2]
 
     #params
-    target_v = 1.0
+    target_v = 5.0
+    temp_v = 10
     
-    temp_v = 0.6
-    
-    w_forward_gauss = 0.01
-    w_forward_lin = 1.5
+    w_forward_gauss = 15.0
 
-    lateral_scale = 0.6
+    reg_scale_1 = 1.0
+    reg_scale_2 = 1.0
+
     angular_scale = 2.0
 
-    reg_scale = 0.001
-
-    survival_bonus = 0.01 * torch.ones(num_envs, device=device)
-
     forward_gauss = torch.exp(-((v_x - target_v) ** 2) / temp_v)
-    forward_lin = torch.clamp(v_x, min=0.0, max=1.0 * target_v) / (2.0 * target_v)
 
-    lateral_penalty = -lateral_scale * (v_y ** 2)
-    angular_penalty = -angular_scale * (ang_z ** 2)
+    action_regularization_1 = -torch.sum(torch.square(actions), dim=-1)
+    action_regularization_2 = -torch.sum(torch.square(actions - prev_actions), dim=-1)
 
-    l1 = torch.norm(action, p=1, dim=1)
-    l2 = torch.norm(action, p=2, dim=1)
-    action_regularization = reg_scale * (-l1 - l2)
+    angular_penalty = -(ang_z ** 2)
 
     reward = (
             w_forward_gauss * forward_gauss * step_dt
-            + w_forward_lin * forward_lin * step_dt
-            + lateral_penalty * step_dt
-            + angular_penalty * step_dt
-            + survival_bonus * step_dt
-            + action_regularization * step_dt
+            + reg_scale_1 * action_regularization_1 * step_dt
+            + reg_scale_2 * action_regularization_2 * step_dt
+            + angular_scale * angular_penalty * step_dt
         )
     
-    #reward = torch.clamp(reward, -3.0, 7.0)
-
     individual_rewards = {
-        "forward_gauss": forward_gauss.to(device).reshape(num_envs),
-        "forward_linear": forward_lin.to(device).reshape(num_envs),
-        "lateral_penalty": lateral_penalty.to(device).reshape(num_envs),
-        "angular_penalty": angular_penalty.to(device).reshape(num_envs),
-        "action_regularization": action_regularization.to(device).reshape(num_envs),
-        "survival_bonus": survival_bonus.to(device).reshape(num_envs),
-        "total_clipped": reward.clone(),
+        "forward_gauss": step_dt * w_forward_gauss * forward_gauss.to(device).reshape(num_envs),
+        "action_regularization_1": step_dt * reg_scale_1 * action_regularization_1.to(device).reshape(num_envs),
+        "action_regularization_2": step_dt * reg_scale_2 * action_regularization_2.to(device).reshape(num_envs),
+        "angular_penalty": step_dt * angular_scale * angular_penalty.to(device).reshape(num_envs)
     }
 
     return reward, individual_rewards
@@ -220,13 +207,13 @@ def compute_dones(
     episode_len_buf: torch.Tensor,
     max_episode_length: int,
     net_contact_forces: torch.Tensor,
-    base_id: int,
+    undesired_ids: torch.Tensor,
     root_pos: torch.Tensor
 ):
-    time_out = episode_len_buf >= max_episode_length - 1
+    time_out = episode_len_buf >= max_episode_length
 
-    max_contact_forces = torch.max(torch.norm(net_contact_forces[:, :, base_id], dim=-1), dim=1).values
-    done_undesired_contacts = max_contact_forces > 1.0
+    max_contact_forces = torch.max(torch.norm(net_contact_forces[:, :, undesired_ids], dim=-1), dim=1).values
+    done_undesired_contacts = torch.any(max_contact_forces > 0.5, dim=1)
 
     done_root_height_below_minimum = root_pos[:, 2] < 0.2
 

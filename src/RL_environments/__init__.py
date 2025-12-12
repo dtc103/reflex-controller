@@ -39,6 +39,7 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.walking_env_muscle_go2_direct:WalkingMuscleGo2DirectCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:WalkingUnitreeGo2MuscleDirectPPORunnerCfg",
+        "sb3_cfg_entry_point": f"{agents.__name__}:sb3_ppo_cfg.yaml"
     }
 )
 

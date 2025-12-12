@@ -26,7 +26,7 @@ UNITREE_GO2_MUSCLE_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.6),
+        pos=(0.0, 0.0, 0.5),
         joint_pos={
             ".*L_hip_joint": 0.1,
             ".*R_hip_joint": -0.1,
