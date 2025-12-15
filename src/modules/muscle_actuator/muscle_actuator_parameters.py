@@ -1,10 +1,10 @@
 muscle_params = {
     "lmin": 0.24,
     "lmax": 1.53,
-    "fvmax": 1.5, #was 1.5 before
-    "vmax": 9.0, #was 4.5 before
+    "fvmax": 1.5,
+    "vmax": 9.0, 
     "fpmax": 1.76,
-    "fmin": 0.1,
+    "fmin": 0.05, # defines lce_min in a way, that it still has 5% of the muscle force left
     "lce_max": 1.0,
     "peak_force": 250.0,
     "dt":1/500,
