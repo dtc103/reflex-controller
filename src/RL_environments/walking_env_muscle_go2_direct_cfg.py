@@ -20,8 +20,8 @@ class EventCfg:
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
-            "position_range": (-1.0, 1.0),
-            "velocity_range": (-1.0, 1.0)
+            "position_range": (-0.5, 0.5),
+            "velocity_range": (-0.5, 0.5)
         }
     )
 
@@ -29,7 +29,7 @@ class EventCfg:
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z":(-0.1, 0.2), "yaw": (0.0, 0.0)},
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z":(-0.3, 0.3), "yaw": (-3.14, 3.14)},
             "velocity_range": {
                 "x": (-0.5, 0.5),
                 "y": (-0.1, 0.5),
@@ -41,53 +41,53 @@ class EventCfg:
         },
     )
 
-    # body_perturbations = EventTermCfg(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "mass_distribution_params": (-5.0, 5.0),
-    #         "operation": "add"
-    #     },
-    #     mode="startup"
-    # )
+    body_perturbations = EventTermCfg(
+        func=mdp.randomize_rigid_body_mass,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add"
+        },
+        mode="startup"
+    )
 
-    # physics_material = EventTermCfg(
-    #     func=mdp.randomize_rigid_body_material,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-    #         "static_friction_range": (0.7, 0.8),
-    #         "dynamic_friction_range": (0.5, 0.6),
-    #         "restitution_range": (0.0, 0.0),
-    #         "num_buckets": 64,
-    #     },
-    # )
+    physics_material = EventTermCfg(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.7, 0.8),
+            "dynamic_friction_range": (0.5, 0.6),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+        },
+    )
 
-    # base_com = EventTermCfg(
-    #     func=mdp.randomize_rigid_body_com,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #         "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
-    #     },
-    # )
+    base_com = EventTermCfg(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "com_range": {"x": (-0.1, 0.1), "y": (-0.1, 0.1), "z": (-0.02, 0.02)},
+        },
+    )
 
     base_external_force_torque = EventTermCfg(
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "force_range": (0.0, 50.0),
+            "force_range": (0.0, 0.0),
             "torque_range": (-0.0, 0.0),
         },
     )
 
-    # push_robot = EventTerm(
-    #     func=mdp.push_by_setting_velocity,
-    #     mode="interval",
-    #     interval_range_s=(10.0, 15.0),
-    #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
-    # )
+    push_robot = EventTermCfg(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(5.0, 15.0),
+        params={"velocity_range": {"x": (-1.0, 1.0), "y": (-2.0, 2.0)}},
+    )
 
 @configclass
 class WalkingMuscleGo2DirectCfg(DirectRLEnvCfg):
@@ -112,4 +112,56 @@ class WalkingMuscleGo2DirectCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot/.*", history_length=3, track_air_time=True
     )
 
+    camera_follow = False
+    print_actions = False
+    deactivate_perturbations = False
+
+    # reward parameters
+    target_vel = 1.5
+    vel_std = 0.8
+    vel_scale = 16.0
+
+    action_reg_scale_1 = 0.8
+    action_reg_scale_2 = 0.3
+
+    angular_reg_scale = 10.0
+    z_vel_scale = 2.5
+
+    # curriculum parameters
+    survival_scale = 15
+    survival_ep_length = 150
+
+    forward_push_scale = 10
+    forward_push_ep_length = 150
+    forward_push_threshold = 0.1
+
+    def __post_init__(self):
+        if self.deactivate_perturbations:
+            self.events.base_com = None
+            self.events.base_external_force_torque = None
+            self.events.body_perturbations = None
+            self.events.physics_material = None
+            self.events.push_robot = None
+            self.events.reset_joints = None
+
+@configclass
+class WalkingMuscleGo2DirectCfg_PLAY(WalkingMuscleGo2DirectCfg):
+    deactivate_perturbations = False
     camera_follow = True
+    print_actions=True
+
+    episode_length_s = 5
+
+    def __post_init__(self):
+        self.events.push_robot.interval_range_s = (2.0, 5.0)
+
+        if self.deactivate_perturbations:
+            self.events.base_com = None
+            self.events.base_external_force_torque = None
+            self.events.body_perturbations = None
+            self.events.physics_material = None
+            self.events.push_robot = None
+            self.events.reset_joints = None
+
+
+

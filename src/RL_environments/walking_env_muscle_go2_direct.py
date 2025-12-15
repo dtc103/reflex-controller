@@ -9,11 +9,11 @@ from isaaclab.envs import DirectRLEnv
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.sim.spawners.from_files import spawn_ground_plane, GroundPlaneCfg
 
-from .walking_env_muscle_go2_direct_cfg import WalkingMuscleGo2DirectCfg
+from .walking_env_muscle_go2_direct_cfg import WalkingMuscleGo2DirectCfg, WalkingMuscleGo2DirectCfg_PLAY
 
 
 class WalkingMuscleGo2Direct(DirectRLEnv):
-    cfg: WalkingMuscleGo2DirectCfg
+    cfg: WalkingMuscleGo2DirectCfg | WalkingMuscleGo2DirectCfg_PLAY
 
     def __init__(self, cfg: WalkingMuscleGo2DirectCfg, render_mode: str | None = None, **kwags):
         super().__init__(cfg, render_mode, **kwags)
@@ -22,19 +22,22 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         self._actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), device=self.device)
         self._previous_actions = torch.zeros(self.num_envs, gym.spaces.flatdim(self.single_action_space), device = self.device)
 
-        # self._actions = torch.zeros(self.num_envs, 2 * gym.spaces.flatdim(self.single_action_space), device=self.device)
-        # self._previous_actions = torch.zeros(self.num_envs, 2 * gym.spaces.flatdim(self.single_action_space), device = self.device)
-
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device) for key in [
                 "forward_gauss",
                 "action_regularization_1",
                 "action_regularization_2",
                 "angular_penalty",
+                "z_vel_penalty"
             ]
         }
 
-        self.total_mean_timesteps = 0
+        self._curriculum_states = {
+            "survival_weight": self.cfg.survival_scale * self.step_dt,
+            "forward_push": 10 * self.step_dt
+        }
+
+        self.count = 0
 
         self._base_id = torch.tensor(self._contact_sensor.find_bodies("base")[0], device=self.device)
         self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
@@ -58,15 +61,25 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         if self.cfg.camera_follow:
             root_pos = self._robot.data.root_pos_w[0].cpu().numpy().tolist()
 
-            cam_x = root_pos[0] + 3.0 * torch.cos(torch.tensor(-self.total_mean_timesteps / 100)).item()
-            cam_y = root_pos[1] + 3.0 * torch.sin(torch.tensor(-self.total_mean_timesteps / 100)).item()
+            cam_x = root_pos[0] + 3.0 * torch.cos(torch.tensor(-self.count / 100)).item()
+            cam_y = root_pos[1] + 3.0 * torch.sin(torch.tensor(-self.count / 100)).item()
             cam_z = root_pos[2] + 1.0
             self.scene.sim.set_camera_view(eye=[cam_x, cam_y, cam_z], target=[root_pos[0], root_pos[1], 0.5])
 
-        self.total_mean_timesteps += 1
+        self.count += 1
 
         self._actions = actions.clone()
         self._processed_actions = (self.cfg.action_scale * self._actions + self.cfg.action_offset).clamp(min=0.0, max=1.0)
+
+        if self.cfg.print_actions:
+            print("Actions:", self._processed_actions)
+            print("Max Activation:", torch.max(self._processed_actions, dim=-1).values)
+            print("Min Activation:", torch.min(self._processed_actions, dim=-1).values)
+            print("Norm Activation:", torch.sum(torch.square(self._processed_actions), dim=-1))
+            print("Mean Activation:", torch.mean(self._processed_actions, dim=-1))
+            print("Max Torque:", torch.max(self._robot.data.applied_torque, dim=-1).values)
+            print("Min Torque:", torch.min(self._robot.data.applied_torque, dim=-1).values)
+            print("Mean Torque:", torch.mean(self._robot.data.applied_torque, dim=-1))
 
     def _apply_action(self):
         self._robot.set_joint_position_target(self._processed_actions[:, :self._robot.num_joints])
@@ -93,10 +106,15 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
 
     def _get_rewards(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         tot_rew, rew_dic = compute_rewards(
+            self.cfg.target_vel,
+            self.cfg.vel_std,
+            self.cfg.vel_scale,
+            self.cfg.action_reg_scale_1,
+            self.cfg.action_reg_scale_2,
+            self.cfg.angular_reg_scale,
+            self.cfg.z_vel_scale,
             self._robot.data.root_lin_vel_b,
             self._robot.data.root_ang_vel_b,
-            self._robot.data.root_pos_w,
-            self.scene.env_origins,
             self._actions,
             self._previous_actions,
             self.step_dt,
@@ -107,7 +125,17 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
         for key, value in rew_dic.items():
             self._episode_sums[key] += value
 
-        return tot_rew
+        survival_curriculum_rew = max(self.cfg.survival_scale - self.count * self.cfg.survival_scale/(48 * self.cfg.survival_ep_length), 0) * self.step_dt
+
+        self._curriculum_states["survival_weight"] = survival_curriculum_rew
+
+        forward_vel_weight = max(self.cfg.forward_push_scale - self.count * self.cfg.forward_push_scale/(48 * self.cfg.forward_push_ep_length), 0) * self.step_dt
+        initial_forward_vel_curriculum = forward_vel_weight * (self._robot.data.root_lin_vel_b[:, 0] > self.cfg.forward_push_threshold).float()
+
+        self._curriculum_states["forward_push"] = initial_forward_vel_curriculum
+
+        return tot_rew + survival_curriculum_rew + initial_forward_vel_curriculum
+    
     
     def _get_dones(self):
         dones, time_out = compute_dones(
@@ -145,59 +173,60 @@ class WalkingMuscleGo2Direct(DirectRLEnv):
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
         
+        for key in self._curriculum_states.keys():
+            extras["Curriculum/" + key] = self._curriculum_states[key]
+        
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()
         extras["Episode_Termination/base_contact or root_height"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
-        extras["Total Timesteps"] = self.total_mean_timesteps
         self.extras["log"].update(extras)
 
 @torch.jit.script
 def compute_rewards(
+    target_vel: float,
+    vel_std: float,
+    vel_scale: float,
+    action_reg_1_scale: float,
+    action_reg_2_scale:float,
+    angular_scale: float,
+    z_vel_scale: float,
     root_lin_vel_b: torch.Tensor,
     root_ang_vel_b: torch.Tensor,
-    root_pos: torch.Tensor,
-    env_origins: torch.Tensor,
     actions: torch.Tensor,
     prev_actions: torch.Tensor,
     step_dt: float,
     num_envs: int,
     device: str,  
 ):
-    v_x = root_lin_vel_b[:, 0]  # forward speed
-    ang_z = root_ang_vel_b[:, 2]
+    v_x = root_lin_vel_b[:, 0] # forward speed
+    v_z = root_lin_vel_b[:, 2] # vertical speed
+    ang_z = root_ang_vel_b[:, 2] # angular velocity along z axis (yaw)
 
-    #params
-    target_v = 5.0
-    temp_v = 10
-    
-    w_forward_gauss = 15.0
-
-    reg_scale_1 = 1.0
-    reg_scale_2 = 1.0
-
-    angular_scale = 2.0
-
-    forward_gauss = torch.exp(-((v_x - target_v) ** 2) / temp_v)
+    forward_gauss = torch.exp(-((v_x - target_vel) ** 2) / vel_std)
 
     action_regularization_1 = -torch.sum(torch.square(actions), dim=-1)
     action_regularization_2 = -torch.sum(torch.square(actions - prev_actions), dim=-1)
 
     angular_penalty = -(ang_z ** 2)
 
+    vertical_speed_penalty = -(v_z ** 2)
+
     reward = (
-            w_forward_gauss * forward_gauss * step_dt
-            + reg_scale_1 * action_regularization_1 * step_dt
-            + reg_scale_2 * action_regularization_2 * step_dt
+            vel_scale * forward_gauss * step_dt
+            + action_reg_1_scale * action_regularization_1 * step_dt
+            + action_reg_2_scale * action_regularization_2 * step_dt
             + angular_scale * angular_penalty * step_dt
+            + step_dt * z_vel_scale * vertical_speed_penalty
         )
     
     individual_rewards = {
-        "forward_gauss": step_dt * w_forward_gauss * forward_gauss.to(device).reshape(num_envs),
-        "action_regularization_1": step_dt * reg_scale_1 * action_regularization_1.to(device).reshape(num_envs),
-        "action_regularization_2": step_dt * reg_scale_2 * action_regularization_2.to(device).reshape(num_envs),
-        "angular_penalty": step_dt * angular_scale * angular_penalty.to(device).reshape(num_envs)
+        "forward_gauss": step_dt * vel_scale * forward_gauss.to(device).reshape(num_envs),
+        "action_regularization_1": step_dt * action_reg_1_scale * action_regularization_1.to(device).reshape(num_envs),
+        "action_regularization_2": step_dt * action_reg_2_scale * action_regularization_2.to(device).reshape(num_envs),
+        "angular_penalty": step_dt * angular_scale * angular_penalty.to(device).reshape(num_envs),
+        "z_vel_penalty": step_dt * z_vel_scale * vertical_speed_penalty.to(device).reshape(num_envs),
     }
 
     return reward, individual_rewards

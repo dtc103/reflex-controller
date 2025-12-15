@@ -33,7 +33,7 @@ from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 ##
 # Pre-defined configs
 ##
-from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG, UNITREE_GO2_MUSCLE_8D_CFG, UNITREE_GO2_REFLEX_8D_CFG
+from modules.robot_config.unitree_muscle_cfg import UNITREE_GO2_MUSCLE_CFG
 from isaaclab_assets import UNITREE_GO2_CFG
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
@@ -62,7 +62,7 @@ class UnitreeSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    unitree: ArticulationCfg = UNITREE_GO2_REFLEX_8D_CFG.replace(
+    unitree: ArticulationCfg = UNITREE_GO2_MUSCLE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -88,7 +88,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     action = torch.tensor([[0.0] * 24], device=muscle_params["device"])
 
     while simulation_app.is_running():
-        #follow_robot_with_camera(sim, robot, angle_rad=90)
+        follow_robot_with_camera(sim, robot, angle_rad=0.0, radius=1.5, height=0.15)
 
         #if count % 500 == 0:
             #if i1 > 1.0:
@@ -109,8 +109,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # clear internal buffers
             #robot.reset()
 
-        action[:, :] = 0.5
-        action[:, :4] = 0.0
+        action[:, :] = 0.1
+        action[:, 0] = 0.25
+        action[:, 12] = 0.75
 
 
         robot.set_joint_position_target(action[:, :12])
@@ -155,9 +156,9 @@ def main():
     sim.set_camera_view([0.0, 2.0, 2.0], [0.0, 0.0, 0.3])
     # Design scene
     scene_cfg = UnitreeSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0)
-    scene_cfg.unitree.spawn.articulation_props.fix_root_link = False
+    scene_cfg.unitree.spawn.articulation_props.fix_root_link = True
 
-    scene_cfg.unitree.init_state.pos = (0.0, 0.0, 0.5)
+    scene_cfg.unitree.init_state.pos = (0.0, 0.0, 0.6)
     scene_cfg.unitree.init_state.joint_pos = {
         ".*L_hip_joint": 0.3,
         ".*R_hip_joint": -0.3,

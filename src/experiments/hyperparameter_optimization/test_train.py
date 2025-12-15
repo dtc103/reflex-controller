@@ -40,7 +40,6 @@ parser.add_argument(
 parser.add_argument("--trial_id", type=int, default=0)
 parser.add_argument("--n_steps", type=int, default=80) # num_env steps in PPO
 parser.add_argument("--init_noise", type=float, default=1.0)
-parser.add_argument("--value_loss_coeff", type=float, default=1.0)
 parser.add_argument("--clip_param", type=float, default=0.2)
 parser.add_argument("--ent_coef", type=float, default=0.01)
 parser.add_argument("--num_learning_epochs", type=int, default=5)
@@ -73,6 +72,8 @@ import gymnasium as gym
 import logging
 import os
 import torch
+from datetime import datetime
+import optuna
 
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
@@ -116,7 +117,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     agent_cfg.num_steps_per_env = args_cli.n_steps
     agent_cfg.policy.init_noise_std = args_cli.init_noise
-    agent_cfg.algorithm.value_loss_coef = args_cli.value_loss_coeff
     agent_cfg.algorithm.clip_param = args_cli.clip_param
     agent_cfg.algorithm.entropy_coef = args_cli.ent_coef
     agent_cfg.algorithm.num_learning_epochs = args_cli.num_learning_epochs
@@ -182,6 +182,9 @@ def evaluate_policy(env:RslRlVecEnvWrapper, runner: OnPolicyRunner):
             policy_nn.reset(dones)
 
             rewards = rewards + rew
+
+    if torch.isnan(rewards).any():
+        return -1000000000
 
     return torch.mean(rewards).item()
 

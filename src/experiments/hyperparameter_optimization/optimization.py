@@ -3,6 +3,8 @@ import subprocess
 import sys
 import os
 import time
+import argparse
+import numpy as np
 
 LOCK_NAME = "gpu_startup.lock"
 
@@ -34,16 +36,15 @@ class FileLock:
 
 def objective(trial: optuna.Trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-3, log=True)
-    n_steps = trial.suggest_categorical("n_steps", [60, 70, 80, 90])
+    n_steps = trial.suggest_categorical("n_steps", [60, 65, 70, 75, 80, 90])
     batch_size = trial.suggest_categorical("batch_size", [10, 12, 14])
-    gamma = trial.suggest_float("gamma", 0.99, 0.9999, log=True)
-    gae_lambda = trial.suggest_float("gae_lambda", 0.8, 1.0)
+    gamma = trial.suggest_categorical("gamma", np.arange(0.99, 0.999, 0.001).tolist())
+    gae_lambda = trial.suggest_categorical("gae_lambda", np.arange(0.8, 1.0, 0.01).tolist())
     clip_param = trial.suggest_float("clip_param", 0.01, 0.2)
-    ent_coef = trial.suggest_float("ent_coef", 0.001, 0.01)
-    desired_kl = trial.suggest_float("desired_kl", 0.001, 0.01)
-    max_grad_norm = trial.suggest_float("max_grad_norm", 0.2, 1.0)
+    ent_coef = trial.suggest_categorical("ent_coef", np.arange(0.001, 0.01, 0.001).tolist())
+    desired_kl = trial.suggest_categorical("desired_kl", np.arange(0.001, 0.01, 0.001).tolist())
+    max_grad_norm = trial.suggest_categorical("max_grad_norm", np.arange(0.2, 1.1, 0.1).tolist())
     init_noise = trial.suggest_float("init_noise", 0.1, 0.5)
-    value_loss_coeff = trial.suggest_float("value_loss_coeff", 0.8, 1.2)
     num_learning_epochs = trial.suggest_categorical("num_learning_epochs", [4, 5, 6, 7])
 
     log_dir = os.path.join("logs", "optuna", f"trial_{trial.number}")
@@ -52,11 +53,10 @@ def objective(trial: optuna.Trial):
     cmd = [
         sys.executable, "test_train.py",
         "--task", "Muscle-Walk-Unitree-Go2-Direct-v0",
-        "--max_iterations", "1",
+        "--max_iterations", "350",
         "--trial_id", str(trial.number),
         "--n_steps", str(n_steps),
         "--init_noise", str(init_noise),
-        "--value_loss_coeff", str(value_loss_coeff),
         "--clip_param", str(clip_param),
         "--ent_coef", str(ent_coef),
         "--num_learning_epochs", str(num_learning_epochs),
@@ -89,7 +89,6 @@ def objective(trial: optuna.Trial):
         )
 
         for line in iter(process.stdout.readline, ''):
-            print(line)
             if "---ISAAC_LAB_INIT_COMPLETE---" in line:
                 print(f"[Trial {trial.number}] Initialization complete. Releasing lock.")
                 startup_lock.release()
@@ -123,10 +122,28 @@ def objective(trial: optuna.Trial):
     else:
         raise optuna.TrialPruned()
 
+parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
+parser.add_argument("--num_trials", type=int)
+parser.add_argument("--num_jobs", type=int)
+
 if __name__ == "__main__":
     if os.path.exists(LOCK_NAME):
         os.remove(LOCK_NAME)
     os.makedirs(os.path.join("logs", "optuna"), exist_ok=True)
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=150, n_jobs=1)
+    args = parser.parse_args()
+
+    study = optuna.create_study(
+        study_name="walking_muscle_direct_hyperparam_opt",
+        direction="maximize"
+    )
+    study.optimize(objective, n_trials=args.num_trials, n_jobs=args.num_jobs)
+
+    trial = study.best_trial
+
+    print(f"Best Trial Number: {trial.number}")
+    print(f"Best Value: {trial.value}")
+    print("Best Hyperparameters:")
+    for key, value in trial.params.items():
+        print(f"  {key}: {value}")
+

@@ -46,9 +46,9 @@ class WalkingUnitreeGo2MuscleDirectPPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.num_steps_per_env = 75
+        self.num_steps_per_env = 60
 
-        self.clip_actions = 1.0
+        self.clip_actions = 1.0 #keep this, since we map the input from [-1, 1] to [0, 1] in the RL env
         
         self.policy.actor_hidden_dims = [512, 256, 128]
         self.policy.critic_hidden_dims = [512, 256, 128]
@@ -60,18 +60,13 @@ class WalkingUnitreeGo2MuscleDirectPPORunnerCfg(UnitreeGo2MusclePPORunnerCfg):
         self.policy.critic_obs_normalization = True
 
         #self.policy.noise_std_type = 'log'
-        self.policy.init_noise_std = 0.7
+        self.policy.init_noise_std = 0.8
 
-        self.algorithm.num_mini_batches = 6
+        self.algorithm.num_mini_batches = 10
         self.algorithm.num_learning_epochs = 4
 
-        self.algorithm.learning_rate = 1.0e-3
         self.algorithm.gamma = 0.991
         self.algorithm.entropy_coef = 0.008
-        self.algorithm.clip_param = 0.2
-        self.algorithm.lam = 0.95
-        self.algorithm.desired_kl = 0.01
-        self.algorithm.max_grad_norm = 1.0
 
 
 @configclass
